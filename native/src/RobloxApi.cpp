@@ -1,4 +1,5 @@
 #include "RobloxApi.h"
+#include "EngineLog.h"
 #include "RobloxObjectModel.h"
 #include "RobloxScheduler.h"
 #include "RobloxTypes.h"
@@ -77,6 +78,11 @@ namespace
 
 	int robloxWarn(lua_State* L)
 	{
+		EngineLog::write(
+			EngineLog::Component::Luau,
+			"warn() called"
+		);
+
 		const int count =
 			lua_gettop(L);
 
