@@ -281,3 +281,16 @@ LuauRuntime::getRenderCamera() const
 		state_
 	);
 }
+
+bool LuauRuntime::applyRenderPartProperties(
+	const RobloxObjectModel::
+		RenderPartPropertyUpdate& update
+)
+{
+	return
+		RobloxObjectModel::
+			applyRenderPartProperties(
+				state_,
+				update
+			);
+}
