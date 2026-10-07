@@ -20,6 +20,15 @@ public:
 			)
 		>;
 
+	using PropertyCallback =
+		std::function<
+			bool(
+				const RobloxObjectModel::
+					RenderPartPropertyUpdate&
+						update
+			)
+		>;
+
 	Dx11Renderer();
 	~Dx11Renderer();
 
@@ -39,6 +48,10 @@ public:
 
 	void setInputCallback(
 		InputCallback callback
+	);
+
+	void setPropertyCallback(
+		PropertyCallback callback
 	);
 
 	bool pumpEvents();
