@@ -25,6 +25,7 @@ add_executable(roblox_runtime
 	native/src/LuauRuntime.cpp
 	native/src/RobloxApi.cpp
 	native/src/RobloxObjectModel.cpp
+	native/src/RobloxScheduler.cpp
 	native/src/RobloxTypes.cpp
 )
 
