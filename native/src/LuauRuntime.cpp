@@ -205,3 +205,21 @@ void LuauRuntime::emitKey(
 		pressed
 	);
 }
+
+
+std::vector<
+	RobloxObjectModel::RenderPartSnapshot
+> LuauRuntime::getRenderParts() const
+{
+	return RobloxObjectModel::getRenderParts(
+		state_
+	);
+}
+
+RobloxObjectModel::RenderCameraSnapshot
+LuauRuntime::getRenderCamera() const
+{
+	return RobloxObjectModel::getRenderCamera(
+		state_
+	);
+}
