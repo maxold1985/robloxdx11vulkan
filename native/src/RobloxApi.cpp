@@ -13,39 +13,65 @@ extern "C"
 
 namespace
 {
-	int robloxTypeof(lua_State* L)
+	bool pushDeclaredType(
+		lua_State* L,
+		int index
+	)
 	{
-		if (RobloxObjectModel::isInstance(L, 1))
+		const int valueType =
+			lua_type(L, index);
+
+		if (valueType == LUA_TTABLE)
 		{
-			lua_pushstring(L, "Instance");
-			return 1;
+			lua_getfield(
+				L,
+				index,
+				"__type"
+			);
+
+			if (lua_isstring(L, -1))
+				return true;
+
+			lua_pop(L, 1);
 		}
 
-		if (RobloxTypes::isVector3(L, 1))
+		if (
+			valueType == LUA_TTABLE ||
+			valueType == LUA_TUSERDATA
+		)
 		{
-			lua_pushstring(L, "Vector3");
-			return 1;
-		}
-
-		if (lua_isuserdata(L, 1))
-		{
-			if (lua_getmetatable(L, 1))
+			if (lua_getmetatable(L, index))
 			{
-				lua_getfield(L, -1, "__type");
+				lua_getfield(
+					L,
+					-1,
+					"__type"
+				);
 
 				if (lua_isstring(L, -1))
 				{
 					lua_remove(L, -2);
-					return 1;
+					return true;
 				}
 
 				lua_pop(L, 2);
 			}
 		}
 
+		return false;
+	}
+
+	int robloxTypeof(lua_State* L)
+	{
+		if (pushDeclaredType(L, 1))
+			return 1;
+
 		lua_pushstring(
 			L,
-			lua_typename(L, lua_type(L, 1))
+			lua_typename(
+				L,
+				lua_type(L, 1)
+			)
 		);
 
 		return 1;
@@ -53,21 +79,38 @@ namespace
 
 	int robloxWarn(lua_State* L)
 	{
-		const int count = lua_gettop(L);
+		const int count =
+			lua_gettop(L);
 
 		std::fputs("[warn] ", stderr);
 
-		for (int index = 1; index <= count; ++index)
+		for (
+			int index = 1;
+			index <= count;
+			++index
+		)
 		{
 			size_t length = 0;
+
 			const char* value =
-				luaL_tolstring(L, index, &length);
+				luaL_tolstring(
+					L,
+					index,
+					&length
+				);
 
 			if (index > 1)
 				std::fputc('\t', stderr);
 
 			if (value)
-				std::fwrite(value, 1, length, stderr);
+			{
+				std::fwrite(
+					value,
+					1,
+					length,
+					stderr
+				);
+			}
 
 			lua_pop(L, 1);
 		}
@@ -82,14 +125,46 @@ void RobloxApi::install(lua_State* L)
 	RobloxTypes::install(L);
 	RobloxObjectModel::install(L);
 
-	lua_pushcfunction(L, robloxTypeof, "typeof");
+	lua_pushcfunction(
+		L,
+		robloxTypeof,
+		"typeof"
+	);
 	lua_setglobal(L, "typeof");
 
-	lua_pushcfunction(L, robloxWarn, "warn");
+	lua_pushcfunction(
+		L,
+		robloxWarn,
+		"warn"
+	);
 	lua_setglobal(L, "warn");
 }
 
 void RobloxApi::shutdown(lua_State* L)
 {
 	RobloxObjectModel::shutdown(L);
+}
+
+void RobloxApi::step(
+	lua_State* L,
+	double deltaTime
+)
+{
+	RobloxObjectModel::step(
+		L,
+		deltaTime
+	);
+}
+
+void RobloxApi::emitKey(
+	lua_State* L,
+	const std::string& keyCodeName,
+	bool pressed
+)
+{
+	RobloxObjectModel::emitKey(
+		L,
+		keyCodeName,
+		pressed
+	);
 }
