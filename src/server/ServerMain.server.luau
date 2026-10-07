@@ -10,7 +10,7 @@ local engine = Engine.new(RobloxAdapter.new())
 
 engine:RegisterSystem(PhysicsSystem.new())
 
-local gameModules = script:FindFirstChild("GameModules")
+local gameModules = script.Parent:FindFirstChild("GameModules")
 if gameModules ~= nil then
 	engine.Runtime:LoadFolder(gameModules)
 end
