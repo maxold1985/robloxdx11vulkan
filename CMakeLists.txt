@@ -18,7 +18,20 @@ FetchContent_Declare(
 	GIT_TAG master
 )
 
-FetchContent_MakeAvailable(luau)
+FetchContent_GetProperties(luau)
+
+if(NOT luau_POPULATED)
+	FetchContent_Populate(luau)
+
+	# Luau cria o target isocline mesmo com LUAU_BUILD_CLI=OFF.
+	# EXCLUDE_FROM_ALL impede que ele seja compilado pelo target padrão.
+	# roblox_runtime puxa somente Luau.Compiler/Luau.VM e dependências reais.
+	add_subdirectory(
+		"${luau_SOURCE_DIR}"
+		"${luau_BINARY_DIR}"
+		EXCLUDE_FROM_ALL
+	)
+endif()
 
 add_executable(roblox_runtime
 	native/src/main.cpp
