@@ -85,8 +85,66 @@ if(WIN32)
 	target_link_libraries(roblox_runtime PRIVATE
 		d3d11
 		dxgi
-		d3dcompiler
 		user32
 		gdi32
+	)
+
+	set(
+		ROBLOX_FXC
+		""
+		CACHE FILEPATH
+		"Path to fxc.exe used only at build time"
+	)
+
+	if(ROBLOX_FXC)
+		set(FXC_EXECUTABLE "${ROBLOX_FXC}")
+	else()
+		find_program(
+			FXC_EXECUTABLE
+			NAMES
+				fxc.exe
+				fxc
+			HINTS
+				"$ENV{WindowsSdkDir}/bin/x86"
+				"C:/Program Files (x86)/Windows Kits/8.0/bin/x86"
+				"C:/Program Files (x86)/Windows Kits/8.1/bin/x86"
+				"C:/Program Files (x86)/Windows Kits/10/bin/x86"
+		)
+	endif()
+
+	if(NOT FXC_EXECUTABLE)
+		message(
+			FATAL_ERROR
+			"fxc.exe not found. Set -DROBLOX_FXC=C:/path/to/fxc.exe"
+		)
+	endif()
+
+	add_custom_command(
+		TARGET roblox_runtime
+		POST_BUILD
+
+		COMMAND
+			${CMAKE_COMMAND}
+			-E
+			make_directory
+			"$<TARGET_FILE_DIR:roblox_runtime>/shaders"
+
+		COMMAND
+			"${FXC_EXECUTABLE}"
+			/nologo
+			/T vs_4_0
+			/E main
+			/Fo "$<TARGET_FILE_DIR:roblox_runtime>/shaders/CubeVS.cso"
+			"${CMAKE_CURRENT_SOURCE_DIR}/native/shaders/CubeVS.hlsl"
+
+		COMMAND
+			"${FXC_EXECUTABLE}"
+			/nologo
+			/T ps_4_0
+			/E main
+			/Fo "$<TARGET_FILE_DIR:roblox_runtime>/shaders/CubePS.cso"
+			"${CMAKE_CURRENT_SOURCE_DIR}/native/shaders/CubePS.hlsl"
+
+		VERBATIM
 	)
 endif()
