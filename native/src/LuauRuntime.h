@@ -44,6 +44,11 @@ public:
 	RobloxObjectModel::RenderCameraSnapshot
 	getRenderCamera() const;
 
+	bool applyRenderPartProperties(
+		const RobloxObjectModel::
+			RenderPartPropertyUpdate& update
+	);
+
 private:
 	lua_State* state_;
 };
