@@ -1,0 +1,23 @@
+{
+  "name": "RobloxDX11Vulkan",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "RobloxEngine": {
+        "$path": "src/shared/Engine"
+      }
+    },
+    "ServerScriptService": {
+      "EngineServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "EngineClient": {
+          "$path": "src/client"
+        }
+      }
+    }
+  }
+}
