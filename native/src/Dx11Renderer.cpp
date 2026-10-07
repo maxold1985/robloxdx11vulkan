@@ -1,6 +1,7 @@
 #ifdef _WIN32
 
 #include "Dx11Renderer.h"
+#include "EngineLog.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -21,6 +22,54 @@
 
 namespace
 {
+	std::wstring utf8ToWide(
+		const std::string& text
+	)
+	{
+		if (text.empty())
+			return {};
+
+		const int required =
+			MultiByteToWideChar(
+				CP_UTF8,
+				0,
+				text.data(),
+				static_cast<int>(
+					text.size()
+				),
+				nullptr,
+				0
+			);
+
+		if (required <= 0)
+		{
+			return std::wstring(
+				text.begin(),
+				text.end()
+			);
+		}
+
+		std::wstring result(
+			static_cast<std::size_t>(
+				required
+			),
+			L'\0'
+		);
+
+		MultiByteToWideChar(
+			CP_UTF8,
+			0,
+			text.data(),
+			static_cast<int>(
+				text.size()
+			),
+			result.data(),
+			required
+		);
+
+		return result;
+	}
+
 	struct Vertex
 	{
 		DirectX::XMFLOAT3 position;
@@ -249,6 +298,23 @@ struct Dx11Renderer::Impl
 
 	InputCallback inputCallback;
 
+	struct LogButton
+	{
+		HWND handle = nullptr;
+		EngineLog::Component component =
+			EngineLog::Component::Luau;
+		int id = 0;
+	};
+
+	std::vector<LogButton> logButtons;
+
+	HWND logEdit = nullptr;
+	HWND clearLogButton = nullptr;
+	HFONT uiFont = nullptr;
+
+	std::size_t lastRenderedPartCount =
+		static_cast<std::size_t>(-1);
+
 	ComPtr<ID3D11Device> device;
 	ComPtr<ID3D11DeviceContext> context;
 	ComPtr<IDXGISwapChain> swapChain;
@@ -270,6 +336,498 @@ struct Dx11Renderer::Impl
 
 	ComPtr<ID3D11RasterizerState> rasterizerState;
 	ComPtr<ID3D11BlendState> blendState;
+
+	static constexpr int LOG_BUTTON_BASE =
+		4100;
+
+	static constexpr int LOG_CLEAR_BUTTON =
+		4199;
+
+	void appendLogEntry(
+		const EngineLog::Entry& entry
+	)
+	{
+		if (!logEdit)
+			return;
+
+		std::string line;
+		line.reserve(
+			entry.text.size() + 32
+		);
+
+		line += "[";
+		line += EngineLog::name(
+			entry.component
+		);
+		line += "] ";
+		line += entry.text;
+		line += "\r\n";
+
+		const std::wstring wide =
+			utf8ToWide(line);
+
+		const LRESULT length =
+			SendMessageW(
+				logEdit,
+				WM_GETTEXTLENGTH,
+				0,
+				0
+			);
+
+		SendMessageW(
+			logEdit,
+			EM_SETSEL,
+			static_cast<WPARAM>(
+				length
+			),
+			static_cast<LPARAM>(
+				length
+			)
+		);
+
+		SendMessageW(
+			logEdit,
+			EM_REPLACESEL,
+			FALSE,
+			reinterpret_cast<LPARAM>(
+				wide.c_str()
+			)
+		);
+
+		SendMessageW(
+			logEdit,
+			EM_SCROLLCARET,
+			0,
+			0
+		);
+	}
+
+	void updateLogButton(
+		LogButton& button
+	)
+	{
+		if (!button.handle)
+			return;
+
+		std::string label =
+			EngineLog::name(
+				button.component
+			);
+
+		label += EngineLog::isEnabled(
+			button.component
+		)
+			? " [ON]"
+			: " [OFF]";
+
+		const std::wstring wide =
+			utf8ToWide(label);
+
+		SetWindowTextW(
+			button.handle,
+			wide.c_str()
+		);
+	}
+
+	void layoutLogPanel()
+	{
+		if (!window)
+			return;
+
+		RECT client{};
+		GetClientRect(
+			window,
+			&client
+		);
+
+		const int clientWidth =
+			std::max(
+				1L,
+				client.right -
+					client.left
+			);
+
+		const int clientHeight =
+			std::max(
+				1L,
+				client.bottom -
+					client.top
+			);
+
+		const int margin = 6;
+		const int buttonHeight = 24;
+		const int buttonGap = 4;
+		const int panelHeight =
+			std::min(
+				240,
+				std::max(
+					120,
+					clientHeight / 3
+				)
+			);
+
+		const int panelTop =
+			std::max(
+				0,
+				clientHeight -
+					panelHeight
+			);
+
+		const int buttonWidth = 124;
+
+		const int availableWidth =
+			std::max(
+				buttonWidth,
+				clientWidth -
+					margin * 2 -
+					80
+			);
+
+		const int buttonsPerRow =
+			std::max(
+				1,
+				availableWidth /
+					(
+						buttonWidth +
+						buttonGap
+					)
+			);
+
+		int maxRow = 0;
+
+		for (
+			std::size_t index = 0;
+			index < logButtons.size();
+			++index
+		)
+		{
+			const int row =
+				static_cast<int>(
+					index
+				) /
+				buttonsPerRow;
+
+			const int column =
+				static_cast<int>(
+					index
+				) %
+				buttonsPerRow;
+
+			maxRow =
+				std::max(
+					maxRow,
+					row
+				);
+
+			MoveWindow(
+				logButtons[index].handle,
+				margin +
+					column *
+					(
+						buttonWidth +
+						buttonGap
+					),
+				panelTop +
+					margin +
+					row *
+					(
+						buttonHeight +
+						buttonGap
+					),
+				buttonWidth,
+				buttonHeight,
+				TRUE
+			);
+		}
+
+		const int clearWidth = 70;
+
+		if (clearLogButton)
+		{
+			MoveWindow(
+				clearLogButton,
+				std::max(
+					margin,
+					clientWidth -
+						margin -
+						clearWidth
+				),
+				panelTop + margin,
+				clearWidth,
+				buttonHeight,
+				TRUE
+			);
+		}
+
+		const int buttonRows =
+			logButtons.empty()
+				? 0
+				: maxRow + 1;
+
+		const int editTop =
+			panelTop +
+			margin +
+			buttonRows *
+				(
+					buttonHeight +
+					buttonGap
+				);
+
+		if (logEdit)
+		{
+			MoveWindow(
+				logEdit,
+				margin,
+				editTop,
+				std::max(
+					1,
+					clientWidth -
+						margin * 2
+				),
+				std::max(
+					1,
+					clientHeight -
+						editTop -
+						margin
+				),
+				TRUE
+			);
+		}
+	}
+
+	bool createLogPanel()
+	{
+		uiFont =
+			static_cast<HFONT>(
+				GetStockObject(
+					DEFAULT_GUI_FONT
+				)
+			);
+
+		logButtons.clear();
+
+		for (
+			std::size_t index = 0;
+			index <
+				EngineLog::componentCount();
+			++index
+		)
+		{
+			LogButton button;
+			button.component =
+				EngineLog::componentAt(
+					index
+				);
+
+			button.id =
+				LOG_BUTTON_BASE +
+				static_cast<int>(
+					index
+				);
+
+			button.handle =
+				CreateWindowExW(
+					0,
+					L"BUTTON",
+					L"",
+					WS_CHILD |
+						WS_VISIBLE |
+						BS_PUSHBUTTON,
+					0,
+					0,
+					100,
+					24,
+					window,
+					reinterpret_cast<HMENU>(
+						static_cast<INT_PTR>(
+							button.id
+						)
+					),
+					GetModuleHandleW(
+						nullptr
+					),
+					nullptr
+				);
+
+			if (!button.handle)
+				return false;
+
+			SendMessageW(
+				button.handle,
+				WM_SETFONT,
+				reinterpret_cast<WPARAM>(
+					uiFont
+				),
+				TRUE
+			);
+
+			logButtons.push_back(
+				button
+			);
+
+			updateLogButton(
+				logButtons.back()
+			);
+		}
+
+		clearLogButton =
+			CreateWindowExW(
+				0,
+				L"BUTTON",
+				L"Clear",
+				WS_CHILD |
+					WS_VISIBLE |
+					BS_PUSHBUTTON,
+				0,
+				0,
+				70,
+				24,
+				window,
+				reinterpret_cast<HMENU>(
+					static_cast<INT_PTR>(
+						LOG_CLEAR_BUTTON
+					)
+				),
+				GetModuleHandleW(nullptr),
+				nullptr
+			);
+
+		if (!clearLogButton)
+			return false;
+
+		SendMessageW(
+			clearLogButton,
+			WM_SETFONT,
+			reinterpret_cast<WPARAM>(
+				uiFont
+			),
+			TRUE
+		);
+
+		logEdit =
+			CreateWindowExW(
+				WS_EX_CLIENTEDGE,
+				L"EDIT",
+				L"",
+				WS_CHILD |
+					WS_VISIBLE |
+					WS_VSCROLL |
+					ES_LEFT |
+					ES_MULTILINE |
+					ES_AUTOVSCROLL |
+					ES_READONLY |
+					ES_NOHIDESEL,
+				0,
+				0,
+				100,
+				100,
+				window,
+				nullptr,
+				GetModuleHandleW(nullptr),
+				nullptr
+			);
+
+		if (!logEdit)
+			return false;
+
+		SendMessageW(
+			logEdit,
+			WM_SETFONT,
+			reinterpret_cast<WPARAM>(
+				uiFont
+			),
+			TRUE
+		);
+
+		layoutLogPanel();
+
+		for (
+			const EngineLog::Entry& entry :
+			EngineLog::snapshot()
+		)
+		{
+			appendLogEntry(entry);
+		}
+
+		EngineLog::setSink(
+			[this](
+				const EngineLog::Entry& entry
+			)
+			{
+				appendLogEntry(entry);
+			}
+		);
+
+		EngineLog::write(
+			EngineLog::Component::Renderer,
+			"log panel initialized"
+		);
+
+		return true;
+	}
+
+	void handleLogCommand(
+		int commandId
+	)
+	{
+		if (
+			commandId ==
+			LOG_CLEAR_BUTTON
+		)
+		{
+			EngineLog::clear();
+
+			if (logEdit)
+				SetWindowTextW(
+					logEdit,
+					L""
+				);
+
+			SetFocus(window);
+			return;
+		}
+
+		const int index =
+			commandId -
+			LOG_BUTTON_BASE;
+
+		if (
+			index < 0 ||
+			static_cast<std::size_t>(
+				index
+			) >= logButtons.size()
+		)
+		{
+			return;
+		}
+
+		LogButton& button =
+			logButtons[
+				static_cast<std::size_t>(
+					index
+				)
+			];
+
+		const bool enabled =
+			EngineLog::toggle(
+				button.component
+			);
+
+		updateLogButton(button);
+
+		EngineLog::writef(
+			EngineLog::Component::Renderer,
+			"log %s: %s",
+			EngineLog::name(
+				button.component
+			),
+			enabled
+				? "ON"
+				: "OFF"
+		);
+
+		SetFocus(window);
+	}
 
 	static LRESULT CALLBACK windowProc(
 		HWND hwnd,
@@ -309,6 +867,24 @@ struct Dx11Renderer::Impl
 
 		if (self)
 		{
+			if (
+				message == WM_COMMAND &&
+				HIWORD(wParam) ==
+					BN_CLICKED
+			)
+			{
+				self->handleLogCommand(
+					LOWORD(wParam)
+				);
+
+				return 0;
+			}
+
+			if (message == WM_SIZE)
+			{
+				self->layoutLogPanel();
+			}
+
 			if (
 				message == WM_KEYDOWN ||
 				message == WM_SYSKEYDOWN
@@ -444,6 +1020,9 @@ struct Dx11Renderer::Impl
 			);
 
 		if (!window)
+			return false;
+
+		if (!createLogPanel())
 			return false;
 
 		ShowWindow(
@@ -1011,6 +1590,10 @@ Dx11Renderer::Dx11Renderer()
 
 Dx11Renderer::~Dx11Renderer()
 {
+	EngineLog::setSink(
+		{}
+	);
+
 	if (
 		impl_ &&
 		impl_->window
@@ -1049,6 +1632,13 @@ bool Dx11Renderer::initialize(
 
 	if (!impl_->createPipeline())
 		return false;
+
+	EngineLog::writef(
+		EngineLog::Component::Renderer,
+		"DX11 initialized %dx%d",
+		width,
+		height
+	);
 
 	impl_->running = true;
 	return true;
@@ -1099,6 +1689,23 @@ void Dx11Renderer::render(
 {
 	if (!impl_->running)
 		return;
+
+	if (
+		impl_->lastRenderedPartCount !=
+			parts.size()
+	)
+	{
+		impl_->lastRenderedPartCount =
+			parts.size();
+
+		EngineLog::writef(
+			EngineLog::Component::Renderer,
+			"Workspace render parts: %u",
+			static_cast<unsigned int>(
+				parts.size()
+			)
+		);
+	}
 
 	impl_->setupFrame();
 
