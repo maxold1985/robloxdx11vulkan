@@ -7,8 +7,9 @@
 
 #include <d3d11.h>
 #include <d3dcompiler.h>
+
+#include "ComPtrLite.h"
 #include "DirectXMathLite.h"
-#include <wrl/client.h>
 
 #include <algorithm>
 #include <array>
@@ -18,8 +19,6 @@
 #include <iterator>
 #include <utility>
 #include <vector>
-
-using Microsoft::WRL::ComPtr;
 
 namespace
 {
