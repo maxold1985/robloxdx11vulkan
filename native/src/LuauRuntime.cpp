@@ -7,11 +7,8 @@
 #include <sstream>
 #include <stdexcept>
 
-extern "C"
-{
 #include "lua.h"
 #include "lualib.h"
-}
 
 #include "luacode.h"
 
