@@ -439,19 +439,16 @@ namespace
 		lua_State* mainThread =
 			lua_mainthread(L);
 
-		const int ref =
-			record->threadRef;
+		lua_getref(
+			L,
+			record->threadRef
+		);
 
 		resumeRecord(
 			mainThread,
 			scheduler,
 			record
 		);
-
-		if (ref != LUA_NOREF)
-			lua_getref(L, ref);
-		else
-			lua_pushnil(L);
 
 		return 1;
 	}
