@@ -17,6 +17,7 @@
 #include <cstring>
 #include <iterator>
 #include <utility>
+#include <vector>
 
 using Microsoft::WRL::ComPtr;
 
@@ -249,7 +250,10 @@ struct Dx11Renderer::Impl
 
 	ComPtr<ID3D11Buffer> vertexBuffer;
 	ComPtr<ID3D11Buffer> indexBuffer;
+	ComPtr<ID3D11Buffer> gridVertexBuffer;
 	ComPtr<ID3D11Buffer> constantBuffer;
+
+	UINT gridVertexCount = 0;
 
 	ComPtr<ID3D11RasterizerState> rasterizerState;
 	ComPtr<ID3D11BlendState> blendState;
@@ -686,6 +690,113 @@ struct Dx11Renderer::Impl
 		if (FAILED(hr))
 			return false;
 
+		std::vector<Vertex> gridVertices;
+
+		constexpr int gridHalfCount = 20;
+		constexpr float gridSpacing = 4.0f;
+		constexpr float gridExtent =
+			gridHalfCount * gridSpacing;
+
+		for (
+			int line = -gridHalfCount;
+			line <= gridHalfCount;
+			++line
+		)
+		{
+			const float offset =
+				line * gridSpacing;
+
+			gridVertices.push_back(
+				{
+					{
+						-gridExtent,
+						0.0f,
+						offset
+					},
+					{
+						0.0f,
+						1.0f,
+						0.0f
+					}
+				}
+			);
+
+			gridVertices.push_back(
+				{
+					{
+						gridExtent,
+						0.0f,
+						offset
+					},
+					{
+						0.0f,
+						1.0f,
+						0.0f
+					}
+				}
+			);
+
+			gridVertices.push_back(
+				{
+					{
+						offset,
+						0.0f,
+						-gridExtent
+					},
+					{
+						0.0f,
+						1.0f,
+						0.0f
+					}
+				}
+			);
+
+			gridVertices.push_back(
+				{
+					{
+						offset,
+						0.0f,
+						gridExtent
+					},
+					{
+						0.0f,
+						1.0f,
+						0.0f
+					}
+				}
+			);
+		}
+
+		gridVertexCount =
+			static_cast<UINT>(
+				gridVertices.size()
+			);
+
+		D3D11_BUFFER_DESC gridDesc{};
+		gridDesc.ByteWidth =
+			static_cast<UINT>(
+				gridVertices.size() *
+				sizeof(Vertex)
+			);
+		gridDesc.Usage =
+			D3D11_USAGE_IMMUTABLE;
+		gridDesc.BindFlags =
+			D3D11_BIND_VERTEX_BUFFER;
+
+		D3D11_SUBRESOURCE_DATA gridData{};
+		gridData.pSysMem =
+			gridVertices.data();
+
+		hr =
+			device->CreateBuffer(
+				&gridDesc,
+				&gridData,
+				&gridVertexBuffer
+			);
+
+		if (FAILED(hr))
+			return false;
+
 		D3D11_BUFFER_DESC constantDesc{};
 		constantDesc.ByteWidth =
 			sizeof(ConstantBuffer);
@@ -1049,6 +1160,78 @@ void Dx11Renderer::render(
 
 	const XMMATRIX viewProjection =
 		view * projection;
+
+	{
+		ConstantBuffer gridConstants{};
+
+		XMStoreFloat4x4(
+			&gridConstants.world,
+			XMMatrixIdentity()
+		);
+
+		XMStoreFloat4x4(
+			&gridConstants.viewProjection,
+			viewProjection
+		);
+
+		gridConstants.color =
+			XMFLOAT4(
+				0.22f,
+				0.26f,
+				0.32f,
+				1.0f
+			);
+
+		impl_->context->UpdateSubresource(
+			impl_->constantBuffer.Get(),
+			0,
+			nullptr,
+			&gridConstants,
+			0,
+			0
+		);
+
+		const UINT stride =
+			sizeof(Vertex);
+		const UINT offset = 0;
+
+		ID3D11Buffer* gridBuffers[] = {
+			impl_->gridVertexBuffer.Get()
+		};
+
+		impl_->context->IASetVertexBuffers(
+			0,
+			1,
+			gridBuffers,
+			&stride,
+			&offset
+		);
+
+		impl_->context->IASetPrimitiveTopology(
+			D3D11_PRIMITIVE_TOPOLOGY_LINELIST
+		);
+
+		impl_->context->Draw(
+			impl_->gridVertexCount,
+			0
+		);
+
+		ID3D11Buffer* cubeBuffers[] = {
+			impl_->vertexBuffer.Get()
+		};
+
+		impl_->context->IASetVertexBuffers(
+			0,
+			1,
+			cubeBuffers,
+			&stride,
+			&offset
+		);
+
+		impl_->context->IASetPrimitiveTopology(
+			D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+		);
+	}
 
 	for (const auto& part : parts)
 	{
