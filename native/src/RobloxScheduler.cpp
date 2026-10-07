@@ -285,7 +285,8 @@ namespace
 	void resumeRecord(
 		lua_State* mainThread,
 		SchedulerContext& scheduler,
-		ThreadRecord* record
+		ThreadRecord* record,
+		int explicitArgumentCount = -1
 	)
 	{
 		if (
@@ -298,9 +299,15 @@ namespace
 
 		record->scheduled = false;
 
-		int argumentCount = 0;
+		int argumentCount =
+			explicitArgumentCount >= 0
+				? explicitArgumentCount
+				: 0;
 
-		if (!record->started)
+		if (
+			explicitArgumentCount < 0 &&
+			!record->started
+		)
 		{
 			record->started = true;
 
@@ -312,6 +319,7 @@ namespace
 				->initialArgumentCount = 0;
 		}
 		else if (
+			explicitArgumentCount < 0 &&
 			record->resumeWithElapsed
 		)
 		{
@@ -742,6 +750,57 @@ void RobloxScheduler::step(
 			record
 		);
 	}
+}
+
+void RobloxScheduler::suspend(
+	lua_State* L
+)
+{
+	SchedulerContext& scheduler =
+		context(L);
+
+	ThreadRecord* record =
+		pinCurrentThread(
+			L,
+			scheduler
+		);
+
+	record->scheduled = false;
+	record->resumeWithElapsed = false;
+}
+
+bool RobloxScheduler::resume(
+	lua_State* L,
+	lua_State* thread,
+	int argumentCount
+)
+{
+	if (!thread)
+		return false;
+
+	SchedulerContext& scheduler =
+		context(L);
+
+	ThreadRecord* record =
+		findRecord(
+			scheduler,
+			thread
+		);
+
+	if (!record)
+		return false;
+
+	record->scheduled = false;
+	record->resumeWithElapsed = false;
+
+	resumeRecord(
+		lua_mainthread(L),
+		scheduler,
+		record,
+		argumentCount
+	);
+
+	return true;
 }
 
 bool RobloxScheduler::isManaged(
