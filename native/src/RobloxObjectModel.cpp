@@ -4047,6 +4047,352 @@ namespace
 				std::move(waiter)
 			);
 		}
+
+
+	struct CollisionAxis
+	{
+		int axis = -1;
+		double normal = 0.0;
+		double penetration = 0.0;
+		double relativeSpeed = 0.0;
+	};
+
+	bool computeAabbCollision(
+		const InstanceObject* a,
+		const InstanceObject* b,
+		CollisionAxis& result
+	)
+	{
+		const double deltaX =
+			b->position.x -
+			a->position.x;
+
+		const double deltaY =
+			b->position.y -
+			a->position.y;
+
+		const double deltaZ =
+			b->position.z -
+			a->position.z;
+
+		const double overlapX =
+			(a->size.x + b->size.x) *
+				0.5 -
+			std::abs(deltaX);
+
+		const double overlapY =
+			(a->size.y + b->size.y) *
+				0.5 -
+			std::abs(deltaY);
+
+		const double overlapZ =
+			(a->size.z + b->size.z) *
+				0.5 -
+			std::abs(deltaZ);
+
+		if (
+			overlapX <= 0.0 ||
+			overlapY <= 0.0 ||
+			overlapZ <= 0.0
+		)
+		{
+			return false;
+		}
+
+		result.axis = 0;
+		result.penetration = overlapX;
+		result.normal =
+			deltaX >= 0.0
+				? 1.0
+				: -1.0;
+
+		if (overlapY < result.penetration)
+		{
+			result.axis = 1;
+			result.penetration =
+				overlapY;
+			result.normal =
+				deltaY >= 0.0
+					? 1.0
+					: -1.0;
+		}
+
+		if (overlapZ < result.penetration)
+		{
+			result.axis = 2;
+			result.penetration =
+				overlapZ;
+			result.normal =
+				deltaZ >= 0.0
+					? 1.0
+					: -1.0;
+		}
+
+		double velocityA = 0.0;
+		double velocityB = 0.0;
+
+		if (result.axis == 0)
+		{
+			velocityA =
+				a->assemblyLinearVelocity.x;
+			velocityB =
+				b->assemblyLinearVelocity.x;
+		}
+		else if (result.axis == 1)
+		{
+			velocityA =
+				a->assemblyLinearVelocity.y;
+			velocityB =
+				b->assemblyLinearVelocity.y;
+		}
+		else
+		{
+			velocityA =
+				a->assemblyLinearVelocity.z;
+			velocityB =
+				b->assemblyLinearVelocity.z;
+		}
+
+		result.relativeSpeed =
+			std::abs(
+				velocityB -
+				velocityA
+			);
+
+		return true;
+	}
+
+	void applyAxisCorrection(
+		InstanceObject* object,
+		int axis,
+		double amount
+	)
+	{
+		if (axis == 0)
+		{
+			object->position.x +=
+				amount;
+			object
+				->assemblyLinearVelocity
+				.x = 0.0;
+		}
+		else if (axis == 1)
+		{
+			object->position.y +=
+				amount;
+			object
+				->assemblyLinearVelocity
+				.y = 0.0;
+		}
+		else
+		{
+			object->position.z +=
+				amount;
+			object
+				->assemblyLinearVelocity
+				.z = 0.0;
+		}
+	}
+
+	void resolveAabbPair(
+		InstanceObject* a,
+		InstanceObject* b
+	)
+	{
+		if (
+			!a ||
+			!b ||
+			a == b ||
+			a->destroyed ||
+			b->destroyed ||
+			!a->canCollide ||
+			!b->canCollide ||
+			(a->anchored && b->anchored)
+		)
+		{
+			return;
+		}
+
+		CollisionAxis collision;
+
+		if (
+			!computeAabbCollision(
+				a,
+				b,
+				collision
+			)
+		)
+		{
+			return;
+		}
+
+		const double separation =
+			collision.penetration +
+			0.0001;
+
+		if (
+			!a->anchored &&
+			!b->anchored
+		)
+		{
+			applyAxisCorrection(
+				a,
+				collision.axis,
+				-collision.normal *
+					separation *
+					0.5
+			);
+
+			applyAxisCorrection(
+				b,
+				collision.axis,
+				collision.normal *
+					separation *
+					0.5
+			);
+		}
+		else if (!a->anchored)
+		{
+			applyAxisCorrection(
+				a,
+				collision.axis,
+				-collision.normal *
+					separation
+			);
+		}
+		else if (!b->anchored)
+		{
+			applyAxisCorrection(
+				b,
+				collision.axis,
+				collision.normal *
+					separation
+			);
+		}
+
+		if (
+			collision.relativeSpeed >=
+			5.0
+		)
+		{
+			EngineLog::writef(
+				EngineLog::Component::Physics,
+				"collision %s <-> %s axis=%c speed=%.3f",
+				a->name.c_str(),
+				b->name.c_str(),
+				collision.axis == 0
+					? 'X'
+					: (
+						collision.axis == 1
+							? 'Y'
+							: 'Z'
+					),
+				collision.relativeSpeed
+			);
+		}
+	}
+
+	void collectCollidableParts(
+		RuntimeContext& runtime,
+		std::vector<InstanceObject*>& output
+	)
+	{
+		output.clear();
+
+		for (
+			const auto& owned :
+			runtime.objects
+		)
+		{
+			InstanceObject* object =
+				owned.get();
+
+			if (
+				object->destroyed ||
+				!object->canCollide ||
+				!isBasePartClass(
+					object->className
+				) ||
+				!isSelfOrDescendantOf(
+					object,
+					runtime.workspace
+				)
+			)
+			{
+				continue;
+			}
+
+			output.push_back(object);
+		}
+	}
+
+	void simulatePhysicsSubstep(
+		RuntimeContext& runtime,
+		double deltaTime
+	)
+	{
+		std::vector<InstanceObject*>
+			collidableParts;
+
+		collectCollidableParts(
+			runtime,
+			collidableParts
+		);
+
+		for (
+			InstanceObject* object :
+			collidableParts
+		)
+		{
+			if (object->anchored)
+				continue;
+
+			object
+				->assemblyLinearVelocity
+				.y -=
+					runtime.gravity *
+					deltaTime;
+
+			object->position.x +=
+				object
+					->assemblyLinearVelocity
+					.x *
+				deltaTime;
+
+			object->position.y +=
+				object
+					->assemblyLinearVelocity
+					.y *
+				deltaTime;
+
+			object->position.z +=
+				object
+					->assemblyLinearVelocity
+					.z *
+				deltaTime;
+		}
+
+		for (
+			std::size_t first = 0;
+			first < collidableParts.size();
+			++first
+		)
+		{
+			for (
+				std::size_t second =
+					first + 1;
+				second <
+					collidableParts.size();
+				++second
+			)
+			{
+				resolveAabbPair(
+					collidableParts[first],
+					collidableParts[second]
+				);
+			}
+		}
+	}
 	}
 }
 
@@ -4300,52 +4646,46 @@ void RobloxObjectModel::step(
 		deltaTime
 	);
 
+	constexpr double maxPhysicsStep =
+		1.0 / 120.0;
+
+	int substepCount =
+		deltaTime > 0.0
+			? static_cast<int>(
+				std::ceil(
+					deltaTime /
+					maxPhysicsStep
+				)
+			)
+			: 1;
+
+	substepCount =
+		std::max(
+			1,
+			std::min(
+				substepCount,
+				32
+			)
+		);
+
+	const double substepDelta =
+		substepCount > 0
+			? deltaTime /
+				static_cast<double>(
+					substepCount
+				)
+			: 0.0;
+
 	for (
-		const auto& owned :
-		runtime.objects
+		int substep = 0;
+		substep < substepCount;
+		++substep
 	)
 	{
-		InstanceObject* object =
-			owned.get();
-
-		if (
-			object->destroyed ||
-			!isBasePartClass(
-				object->className
-			) ||
-			object->anchored ||
-			!isSelfOrDescendantOf(
-				object,
-				runtime.workspace
-			)
-		)
-		{
-			continue;
-		}
-
-		object
-			->assemblyLinearVelocity
-			.y -=
-				runtime.gravity *
-				deltaTime;
-
-		object->position.x +=
-			object
-				->assemblyLinearVelocity
-				.x *
-			deltaTime;
-
-		object->position.y +=
-			object
-				->assemblyLinearVelocity
-				.y *
-			deltaTime;
-
-		object->position.z +=
-			object
-				->assemblyLinearVelocity
-				.z *
-			deltaTime;
+		simulatePhysicsSubstep(
+			runtime,
+			substepDelta
+		);
 	}
 
 	fireEventNumber(
