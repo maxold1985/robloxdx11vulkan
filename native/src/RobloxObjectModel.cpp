@@ -2384,9 +2384,14 @@ namespace
 			key == "UserId"
 		)
 		{
-			lua_pushinteger64(
+			// Roblox exposes Player.UserId to Luau as number.
+			// Keep integer storage natively, but push a Luau number
+			// so normal Roblox operations such as string concatenation work.
+			lua_pushnumber(
 				L,
-				object->userId
+				static_cast<double>(
+					object->userId
+				)
 			);
 			return 1;
 		}
