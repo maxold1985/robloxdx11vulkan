@@ -8,6 +8,20 @@ local REMOTE_NAME = "CubeControl"
 local MOVE_SPEED = 24
 local JUMP_SPEED = 35
 
+local baseplate = Workspace:FindFirstChild("Baseplate")
+
+if not baseplate then
+	baseplate = Instance.new("Part")
+	baseplate.Name = "Baseplate"
+	baseplate.Size = Vector3.new(2048, 1, 2048)
+	baseplate.Position = Vector3.new(0, -0.5, 0)
+	baseplate.Anchored = true
+	baseplate.CanCollide = true
+	baseplate.Color = Color3.fromRGB(91, 93, 105)
+	baseplate.Material = Enum.Material.SmoothPlastic
+	baseplate.Parent = Workspace
+end
+
 local remote = ReplicatedStorage:FindFirstChild(REMOTE_NAME)
 
 if not remote then
