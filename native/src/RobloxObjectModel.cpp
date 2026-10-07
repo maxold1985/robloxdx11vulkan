@@ -4047,7 +4047,7 @@ namespace
 				std::move(waiter)
 			);
 		}
-
+	}
 
 	struct CollisionAxis
 	{
@@ -4392,7 +4392,6 @@ namespace
 				);
 			}
 		}
-	}
 	}
 }
 
