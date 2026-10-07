@@ -49,3 +49,15 @@ add_test(
 	COMMAND roblox_runtime
 		${CMAKE_CURRENT_SOURCE_DIR}/native/scripts/test.luau
 )
+
+
+add_test(
+	NAME roblox_cube_control_smoke
+	COMMAND roblox_runtime
+		${CMAKE_CURRENT_SOURCE_DIR}/native/scripts/cube/CubeServer.server.lua
+		${CMAKE_CURRENT_SOURCE_DIR}/native/scripts/cube/CubeClient.client.lua
+		--press=W
+		--press=Space
+		--step=2
+		${CMAKE_CURRENT_SOURCE_DIR}/native/scripts/cube/CubeVerify.luau
+)
