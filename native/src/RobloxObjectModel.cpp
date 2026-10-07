@@ -1,4 +1,5 @@
 #include "RobloxObjectModel.h"
+#include "EngineLog.h"
 #include "RobloxScheduler.h"
 #include "RobloxTypes.h"
 
@@ -193,6 +194,13 @@ namespace
 				: std::move(name);
 
 		InstanceObject* raw = object.get();
+
+		EngineLog::writef(
+			EngineLog::Component::ObjectModel,
+			"create %s \"%s\"",
+			raw->className.c_str(),
+			raw->name.c_str()
+		);
 
 		runtime.objects.push_back(
 			std::move(object)
@@ -816,6 +824,16 @@ namespace
 
 		object->parent = newParent;
 
+		EngineLog::writef(
+			EngineLog::Component::ObjectModel,
+			"parent %s \"%s\" -> %s",
+			object->className.c_str(),
+			object->name.c_str(),
+			newParent
+				? newParent->name.c_str()
+				: "nil"
+		);
+
 		if (newParent)
 		{
 			newParent->children.push_back(
@@ -862,6 +880,13 @@ namespace
 	{
 		if (!object || object->destroyed)
 			return;
+
+		EngineLog::writef(
+			EngineLog::Component::ObjectModel,
+			"destroy %s \"%s\"",
+			object->className.c_str(),
+			object->name.c_str()
+		);
 
 		fireEvent0(
 			L,
@@ -1693,6 +1718,16 @@ namespace
 
 		const int top = lua_gettop(L);
 
+		EngineLog::writef(
+			EngineLog::Component::RemoteEvent,
+			"FireServer %s args=%d",
+			remote->name.c_str(),
+			std::max(
+				0,
+				top - 1
+			)
+		);
+
 		fireRemoteServer(
 			L,
 			remote,
@@ -1715,6 +1750,17 @@ namespace
 		RuntimeContext& runtime =
 			context(L);
 
+		EngineLog::writef(
+			EngineLog::Component::RemoteEvent,
+			"FireClient %s -> %s args=%d",
+			remote->name.c_str(),
+			player->name.c_str(),
+			std::max(
+				0,
+				lua_gettop(L) - 2
+			)
+		);
+
 		if (player == runtime.localPlayer)
 		{
 			fireRemoteClient(
@@ -1734,6 +1780,16 @@ namespace
 	{
 		InstanceObject* remote =
 			checkInstance(L, 1);
+
+		EngineLog::writef(
+			EngineLog::Component::RemoteEvent,
+			"FireAllClients %s args=%d",
+			remote->name.c_str(),
+			std::max(
+				0,
+				lua_gettop(L) - 1
+			)
+		);
 
 		fireRemoteClient(
 			L,
@@ -1772,6 +1828,16 @@ namespace
 		}
 
 		part->networkOwner = player;
+
+		EngineLog::writef(
+			EngineLog::Component::Network,
+			"SetNetworkOwner %s -> %s",
+			part->name.c_str(),
+			player
+				? player->name.c_str()
+				: "server"
+		);
+
 		return 0;
 	}
 
@@ -1783,6 +1849,13 @@ namespace
 			checkInstance(L, 1);
 
 		part->networkOwner = nullptr;
+
+		EngineLog::writef(
+			EngineLog::Component::Network,
+			"SetNetworkOwnershipAuto %s",
+			part->name.c_str()
+		);
+
 		return 0;
 	}
 
@@ -1796,6 +1869,15 @@ namespace
 				L,
 				2
 			);
+
+		EngineLog::writef(
+			EngineLog::Component::Physics,
+			"ApplyImpulse %s (%.3f, %.3f, %.3f)",
+			part->name.c_str(),
+			impulse.x,
+			impulse.y,
+			impulse.z
+		);
 
 		if (part->anchored)
 			return 0;
@@ -2350,6 +2432,17 @@ namespace
 
 		if (!closest)
 		{
+			EngineLog::writef(
+				EngineLog::Component::Raycast,
+				"Raycast miss origin=(%.2f, %.2f, %.2f) dir=(%.2f, %.2f, %.2f)",
+				origin.x,
+				origin.y,
+				origin.z,
+				direction.x,
+				direction.y,
+				direction.z
+			);
+
 			lua_pushnil(L);
 			return 1;
 		}
@@ -2363,12 +2456,23 @@ namespace
 				direction.z * closestT
 		};
 
+		const double hitDistance =
+			directionLength *
+			closestT;
+
+		EngineLog::writef(
+			EngineLog::Component::Raycast,
+			"Raycast hit %s distance=%.3f",
+			closest->name.c_str(),
+			hitDistance
+		);
+
 		pushRaycastResult(
 			L,
 			closest,
 			position,
 			closestNormal,
-			directionLength * closestT
+			hitDistance
 		);
 
 		return 1;
@@ -4286,6 +4390,15 @@ void RobloxObjectModel::emitKey(
 		pressed
 			? "InputBegan"
 			: "InputEnded";
+
+	EngineLog::writef(
+		EngineLog::Component::Input,
+		"key %s %s",
+		keyCodeName.c_str(),
+		pressed
+			? "down"
+			: "up"
+	);
 
 	fireEvent(
 		L,
