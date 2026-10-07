@@ -48,6 +48,8 @@ namespace
 
 	struct InstanceObject
 	{
+		std::uint64_t id = 0;
+
 		std::string className = "Instance";
 		std::string name = "Instance";
 
@@ -114,6 +116,8 @@ namespace
 
 	struct RuntimeContext
 	{
+		std::uint64_t nextObjectId = 1;
+
 		std::vector<
 			std::unique_ptr<InstanceObject>
 		> objects;
@@ -184,6 +188,9 @@ namespace
 	{
 		auto object =
 			std::make_unique<InstanceObject>();
+
+		object->id =
+			runtime.nextObjectId++;
 
 		object->className =
 			std::move(className);
@@ -4771,6 +4778,146 @@ void RobloxObjectModel::emitKey(
 	);
 }
 
+bool RobloxObjectModel::applyRenderPartProperties(
+	lua_State* L,
+	const RenderPartPropertyUpdate& update
+)
+{
+	RuntimeContext& runtime =
+		context(L);
+
+	InstanceObject* object = nullptr;
+
+	for (
+		const auto& owned :
+		runtime.objects
+	)
+	{
+		if (
+			owned &&
+			owned->id == update.id
+		)
+		{
+			object = owned.get();
+			break;
+		}
+	}
+
+	if (
+		!object ||
+		object->destroyed ||
+		!isBasePartClass(
+			object->className
+		)
+	)
+	{
+		return false;
+	}
+
+	const double sizeX =
+		std::max(
+			0.001,
+			static_cast<double>(
+				update.sizeX
+			)
+		);
+
+	const double sizeY =
+		std::max(
+			0.001,
+			static_cast<double>(
+				update.sizeY
+			)
+		);
+
+	const double sizeZ =
+		std::max(
+			0.001,
+			static_cast<double>(
+				update.sizeZ
+			)
+		);
+
+	const double transparency =
+		std::max(
+			0.0,
+			std::min(
+				1.0,
+				static_cast<double>(
+					update.transparency
+				)
+			)
+		);
+
+	object->position.x =
+		update.positionX;
+	object->position.y =
+		update.positionY;
+	object->position.z =
+		update.positionZ;
+
+	object->size.x = sizeX;
+	object->size.y = sizeY;
+	object->size.z = sizeZ;
+
+	object->transparency =
+		transparency;
+
+	object->anchored =
+		update.anchored;
+
+	object->canCollide =
+		update.canCollide;
+
+	firePropertyChanged(
+		L,
+		object,
+		"Position"
+	);
+
+	firePropertyChanged(
+		L,
+		object,
+		"Size"
+	);
+
+	firePropertyChanged(
+		L,
+		object,
+		"Transparency"
+	);
+
+	firePropertyChanged(
+		L,
+		object,
+		"Anchored"
+	);
+
+	firePropertyChanged(
+		L,
+		object,
+		"CanCollide"
+	);
+
+	EngineLog::writef(
+		EngineLog::Component::ObjectModel,
+		"Properties Apply %s id=%llu pos=(%.3f, %.3f, %.3f) size=(%.3f, %.3f, %.3f)",
+		object->name.c_str(),
+		static_cast<unsigned long long>(
+			object->id
+		),
+		object->position.x,
+		object->position.y,
+		object->position.z,
+		object->size.x,
+		object->size.y,
+		object->size.z
+	);
+
+	return true;
+}
+
+
 bool RobloxObjectModel::isInstance(
 	lua_State* L,
 	int index
@@ -4835,6 +4982,7 @@ RobloxObjectModel::getRenderParts(
 
 		RenderPartSnapshot part;
 
+		part.id = object->id;
 		part.name = object->name;
 
 		part.positionX =
@@ -4886,6 +5034,12 @@ RobloxObjectModel::getRenderParts(
 			static_cast<float>(
 				object->transparency
 			);
+
+		part.anchored =
+			object->anchored;
+
+		part.canCollide =
+			object->canCollide;
 
 		result.push_back(
 			std::move(part)
