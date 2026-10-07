@@ -1,4 +1,5 @@
 #include "LuauRuntime.h"
+#include "EngineLog.h"
 #include "RobloxApi.h"
 #include "RobloxScheduler.h"
 
@@ -23,6 +24,11 @@ LuauRuntime::LuauRuntime()
 		);
 	}
 
+	EngineLog::write(
+		EngineLog::Component::Luau,
+		"Luau state created"
+	);
+
 	luaL_openlibs(state_);
 
 	RobloxApi::install(state_);
@@ -44,6 +50,12 @@ bool LuauRuntime::execute(
 	const std::string& chunkName
 )
 {
+	EngineLog::writef(
+		EngineLog::Component::Luau,
+		"execute chunk: %s",
+		chunkName.c_str()
+	);
+
 	size_t bytecodeSize = 0;
 
 	char* bytecode =
@@ -56,6 +68,12 @@ bool LuauRuntime::execute(
 
 	if (!bytecode)
 	{
+		EngineLog::writef(
+			EngineLog::Component::Luau,
+			"compile failed: %s",
+			chunkName.c_str()
+		);
+
 		std::cerr
 			<< "[Luau] compiler returned no bytecode\n";
 
@@ -85,6 +103,15 @@ bool LuauRuntime::execute(
 				thread,
 				-1
 			);
+
+		EngineLog::writef(
+			EngineLog::Component::Luau,
+			"load error in %s: %s",
+			chunkName.c_str(),
+			message
+				? message
+				: "unknown error"
+		);
 
 		std::cerr
 			<< "[Luau load] "
@@ -116,6 +143,15 @@ bool LuauRuntime::execute(
 
 		lua_pop(state_, 1);
 
+		if (managed)
+		{
+			EngineLog::writef(
+				EngineLog::Component::Luau,
+				"chunk yielded: %s",
+				chunkName.c_str()
+			);
+		}
+
 		if (!managed)
 		{
 			std::cerr
@@ -134,6 +170,15 @@ bool LuauRuntime::execute(
 				thread,
 				-1
 			);
+
+		EngineLog::writef(
+			EngineLog::Component::Luau,
+			"runtime error in %s: %s",
+			chunkName.c_str(),
+			message
+				? message
+				: "unknown error"
+		);
 
 		std::cerr
 			<< "[Luau runtime] "
@@ -155,6 +200,13 @@ bool LuauRuntime::execute(
 	}
 
 	lua_pop(state_, 1);
+
+	EngineLog::writef(
+		EngineLog::Component::Luau,
+		"chunk finished: %s",
+		chunkName.c_str()
+	);
+
 	return true;
 }
 
@@ -162,6 +214,12 @@ bool LuauRuntime::executeFile(
 	const std::string& path
 )
 {
+	EngineLog::writef(
+		EngineLog::Component::Luau,
+		"open script: %s",
+		path.c_str()
+	);
+
 	std::ifstream input(
 		path,
 		std::ios::binary
