@@ -1,4 +1,5 @@
 #include "RobloxObjectModel.h"
+#include "RobloxScheduler.h"
 #include "RobloxTypes.h"
 
 #include <algorithm>
@@ -100,6 +101,16 @@ namespace
 		bool once = false;
 	};
 
+	struct ChildWaiter
+	{
+		InstanceObject* parent = nullptr;
+		std::string childName;
+		lua_State* thread = nullptr;
+
+		bool hasDeadline = false;
+		double deadline = 0.0;
+	};
+
 	struct RuntimeContext
 	{
 		std::vector<
@@ -120,6 +131,9 @@ namespace
 		InstanceObject* currentCamera = nullptr;
 
 		double gravity = 196.2;
+		double time = 0.0;
+
+		std::vector<ChildWaiter> childWaiters;
 	};
 
 	struct InstanceUserdata
@@ -1173,19 +1187,46 @@ namespace
 			return 1;
 		}
 
-		if (!lua_isnoneornil(L, 3))
+		if (!lua_isyieldable(L))
 		{
-			lua_pushnil(L);
-			return 1;
+			luaL_error(
+				L,
+				"WaitForChild('%s') cannot yield from this context",
+				name.c_str()
+			);
 		}
 
-		luaL_error(
-			L,
-			"WaitForChild('%s') would yield; scheduler wait support is not implemented yet",
-			name.c_str()
+		RuntimeContext& runtime =
+			context(L);
+
+		ChildWaiter waiter;
+		waiter.parent = object;
+		waiter.childName = name;
+		waiter.thread = L;
+
+		if (!lua_isnoneornil(L, 3))
+		{
+			const double timeout =
+				luaL_checknumber(L, 3);
+
+			if (timeout <= 0.0)
+			{
+				lua_pushnil(L);
+				return 1;
+			}
+
+			waiter.hasDeadline = true;
+			waiter.deadline =
+				runtime.time + timeout;
+		}
+
+		RobloxScheduler::suspend(L);
+
+		runtime.childWaiters.push_back(
+			std::move(waiter)
 		);
 
-		return 0;
+		return lua_yield(L, 0);
 	}
 
 	int instanceFindFirstChildOfClass(
@@ -3717,6 +3758,74 @@ namespace
 		);
 		lua_setfield(L, -2, "KeyCode");
 	}
+
+	void processChildWaiters(
+		lua_State* L,
+		RuntimeContext& runtime
+	)
+	{
+		if (runtime.childWaiters.empty())
+			return;
+
+		std::vector<ChildWaiter> pending;
+		pending.swap(
+			runtime.childWaiters
+		);
+
+		for (ChildWaiter& waiter : pending)
+		{
+			if (!waiter.thread)
+				continue;
+
+			InstanceObject* child =
+				waiter.parent
+					? findFirstChild(
+						waiter.parent,
+						waiter.childName,
+						false
+					)
+					: nullptr;
+
+			if (child)
+			{
+				pushInstance(
+					waiter.thread,
+					child
+				);
+
+				RobloxScheduler::resume(
+					L,
+					waiter.thread,
+					1
+				);
+
+				continue;
+			}
+
+			if (
+				waiter.hasDeadline &&
+				runtime.time >=
+					waiter.deadline
+			)
+			{
+				lua_pushnil(
+					waiter.thread
+				);
+
+				RobloxScheduler::resume(
+					L,
+					waiter.thread,
+					1
+				);
+
+				continue;
+			}
+
+			runtime.childWaiters.push_back(
+				std::move(waiter)
+			);
+		}
+	}
 }
 
 void RobloxObjectModel::install(lua_State* L)
@@ -3954,6 +4063,13 @@ void RobloxObjectModel::step(
 
 	RuntimeContext& runtime =
 		context(L);
+
+	runtime.time += deltaTime;
+
+	processChildWaiters(
+		L,
+		runtime
+	);
 
 	fireEventNumber(
 		L,
