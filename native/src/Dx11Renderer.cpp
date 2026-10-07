@@ -14,6 +14,8 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <iterator>
 #include <utility>
 
 using Microsoft::WRL::ComPtr;
@@ -248,6 +250,9 @@ struct Dx11Renderer::Impl
 	ComPtr<ID3D11Buffer> vertexBuffer;
 	ComPtr<ID3D11Buffer> indexBuffer;
 	ComPtr<ID3D11Buffer> constantBuffer;
+
+	ComPtr<ID3D11RasterizerState> rasterizerState;
+	ComPtr<ID3D11BlendState> blendState;
 
 	static LRESULT CALLBACK windowProc(
 		HWND hwnd,
@@ -696,6 +701,57 @@ struct Dx11Renderer::Impl
 				&constantBuffer
 			);
 
+		if (FAILED(hr))
+			return false;
+
+		D3D11_RASTERIZER_DESC rasterizerDesc{};
+		rasterizerDesc.FillMode =
+			D3D11_FILL_SOLID;
+		rasterizerDesc.CullMode =
+			D3D11_CULL_NONE;
+		rasterizerDesc.DepthClipEnable =
+			TRUE;
+
+		hr =
+			device->CreateRasterizerState(
+				&rasterizerDesc,
+				&rasterizerState
+			);
+
+		if (FAILED(hr))
+			return false;
+
+		D3D11_BLEND_DESC blendDesc{};
+		blendDesc.RenderTarget[0].BlendEnable =
+			TRUE;
+
+		blendDesc.RenderTarget[0].SrcBlend =
+			D3D11_BLEND_SRC_ALPHA;
+
+		blendDesc.RenderTarget[0].DestBlend =
+			D3D11_BLEND_INV_SRC_ALPHA;
+
+		blendDesc.RenderTarget[0].BlendOp =
+			D3D11_BLEND_OP_ADD;
+
+		blendDesc.RenderTarget[0].SrcBlendAlpha =
+			D3D11_BLEND_ONE;
+
+		blendDesc.RenderTarget[0].DestBlendAlpha =
+			D3D11_BLEND_ZERO;
+
+		blendDesc.RenderTarget[0].BlendOpAlpha =
+			D3D11_BLEND_OP_ADD;
+
+		blendDesc.RenderTarget[0].RenderTargetWriteMask =
+			D3D11_COLOR_WRITE_ENABLE_ALL;
+
+		hr =
+			device->CreateBlendState(
+				&blendDesc,
+				&blendState
+			);
+
 		return SUCCEEDED(hr);
 	}
 
@@ -744,6 +800,23 @@ struct Dx11Renderer::Impl
 		context->RSSetViewports(
 			1,
 			&viewport
+		);
+
+		context->RSSetState(
+			rasterizerState.Get()
+		);
+
+		const float blendFactor[4] = {
+			0.0f,
+			0.0f,
+			0.0f,
+			0.0f
+		};
+
+		context->OMSetBlendState(
+			blendState.Get(),
+			blendFactor,
+			0xffffffff
 		);
 
 		const UINT stride =
