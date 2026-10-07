@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <memory>
 #include <utility>
 
 template <typename T>
@@ -43,7 +45,7 @@ public:
 		const ComPtr& other
 	)
 	{
-		if (this == &other)
+		if (this == std::addressof(other))
 			return *this;
 
 		T* newPointer =
