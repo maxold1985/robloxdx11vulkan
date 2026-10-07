@@ -4333,3 +4333,149 @@ bool RobloxObjectModel::isInstance(
 	lua_pop(L, 2);
 	return matches;
 }
+
+
+std::vector<RobloxObjectModel::RenderPartSnapshot>
+RobloxObjectModel::getRenderParts(
+	lua_State* L
+)
+{
+	RuntimeContext& runtime =
+		context(L);
+
+	std::vector<
+		RenderPartSnapshot
+	> result;
+
+	for (
+		const auto& owned :
+		runtime.objects
+	)
+	{
+		InstanceObject* object =
+			owned.get();
+
+		if (
+			object->destroyed ||
+			!isBasePartClass(
+				object->className
+			) ||
+			!isSelfOrDescendantOf(
+				object,
+				runtime.workspace
+			)
+		)
+		{
+			continue;
+		}
+
+		RenderPartSnapshot part;
+
+		part.name = object->name;
+
+		part.positionX =
+			static_cast<float>(
+				object->position.x
+			);
+
+		part.positionY =
+			static_cast<float>(
+				object->position.y
+			);
+
+		part.positionZ =
+			static_cast<float>(
+				object->position.z
+			);
+
+		part.sizeX =
+			static_cast<float>(
+				object->size.x
+			);
+
+		part.sizeY =
+			static_cast<float>(
+				object->size.y
+			);
+
+		part.sizeZ =
+			static_cast<float>(
+				object->size.z
+			);
+
+		part.colorR =
+			static_cast<float>(
+				object->color.r
+			);
+
+		part.colorG =
+			static_cast<float>(
+				object->color.g
+			);
+
+		part.colorB =
+			static_cast<float>(
+				object->color.b
+			);
+
+		part.transparency =
+			static_cast<float>(
+				object->transparency
+			);
+
+		result.push_back(
+			std::move(part)
+		);
+	}
+
+	return result;
+}
+
+RobloxObjectModel::RenderCameraSnapshot
+RobloxObjectModel::getRenderCamera(
+	lua_State* L
+)
+{
+	RuntimeContext& runtime =
+		context(L);
+
+	RenderCameraSnapshot camera;
+
+	if (
+		runtime.currentCamera &&
+		runtime.currentCamera
+			->cameraSubject &&
+		!runtime.currentCamera
+			->cameraSubject
+			->destroyed &&
+		isBasePartClass(
+			runtime.currentCamera
+				->cameraSubject
+				->className
+		)
+	)
+	{
+		InstanceObject* subject =
+			runtime.currentCamera
+				->cameraSubject;
+
+		camera.hasSubject = true;
+
+		camera.targetX =
+			static_cast<float>(
+				subject->position.x
+			);
+
+		camera.targetY =
+			static_cast<float>(
+				subject->position.y
+			);
+
+		camera.targetZ =
+			static_cast<float>(
+				subject->position.z
+			);
+	}
+
+	return camera;
+}
