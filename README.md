@@ -107,3 +107,58 @@ A antiga pasta `src/` contém o protótipo inicial de uma framework que rodava d
 ## Validação
 
 O repositório contém `.github/workflows/native-runtime.yml` e um teste CTest chamado `roblox_runtime_smoke`. O smoke test executa `native/scripts/test.luau` e verifica identidade de Instance, Parent/Children, sinais e propriedades básicas.
+
+
+## Renderer DirectX 11 mínimo
+
+No Windows, o runtime possui agora um renderer DX11 que transforma os `BasePart` presentes no `Workspace` em cubos renderizados.
+
+Fluxo:
+
+```text
+CubeServer.server.lua
+CubeClient.client.lua
+        |
+        v
+Luau VM
+        |
+        v
+Workspace / Part / Camera
+        |
+        v
+Render snapshots
+        |
+        v
+Dx11Renderer
+        |
+        v
+Janela Win32
+```
+
+O renderer usa atualmente:
+
+- `BasePart.Position`
+- `BasePart.Size`
+- `BasePart.Color`
+- `BasePart.Transparency`
+- `Workspace.CurrentCamera.CameraSubject`
+- input real de W/A/S/D/Space via `UserInputService`
+- depth buffer
+- iluminação direcional simples
+- grid visual de debug, que não participa da física nem do `Workspace`
+
+Para executar os dois scripts do cubo:
+
+```bat
+run_cube_dx11.bat
+```
+
+Ou diretamente:
+
+```bat
+build\Release\roblox_runtime.exe --render native\scripts\cube\CubeServer.server.lua native\scripts\cube\CubeClient.client.lua
+```
+
+Se `--render` for usado sem scripts, esses dois arquivos são carregados automaticamente.
+
+O renderer atual é propositalmente mínimo: `Part` é desenhado como box sem rotação. `CFrame`, meshes, texturas, iluminação Roblox completa, materiais e Vulkan serão camadas posteriores.
