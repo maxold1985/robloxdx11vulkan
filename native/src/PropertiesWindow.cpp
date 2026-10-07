@@ -148,7 +148,7 @@ namespace
 			*end != L'\0'
 		)
 		{
-			if (!iswspace(*end))
+			if (!std::iswspace(*end))
 				return false;
 
 			++end;
