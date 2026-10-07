@@ -1,4 +1,5 @@
 #include "RobloxScheduler.h"
+#include "EngineLog.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -338,6 +339,12 @@ namespace
 				false;
 		}
 
+		EngineLog::writef(
+			EngineLog::Component::Scheduler,
+			"resume coroutine args=%d",
+			argumentCount
+		);
+
 		const int status =
 			lua_resume(
 				record->thread,
@@ -421,6 +428,12 @@ namespace
 
 		record->scheduled = true;
 		record->resumeWithElapsed = true;
+
+		EngineLog::writef(
+			EngineLog::Component::Scheduler,
+			"task.wait %.3f sec",
+			seconds
+		);
 
 		return lua_yield(L, 0);
 	}
@@ -506,6 +519,12 @@ namespace
 					1
 				)
 			);
+
+		EngineLog::writef(
+			EngineLog::Component::Scheduler,
+			"task.delay %.3f sec",
+			seconds
+		);
 
 		luaL_checktype(
 			L,
@@ -639,6 +658,11 @@ void RobloxScheduler::install(
 	lua_setfield(L, -2, "cancel");
 
 	lua_setglobal(L, "task");
+
+	EngineLog::write(
+		EngineLog::Component::Scheduler,
+		"scheduler installed"
+	);
 }
 
 void RobloxScheduler::shutdown(
