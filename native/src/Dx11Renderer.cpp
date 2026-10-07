@@ -393,7 +393,7 @@ struct Dx11Renderer::Impl
 		wc.hCursor =
 			LoadCursorW(
 				nullptr,
-				IDC_ARROW
+				MAKEINTRESOURCEW(32512)
 			);
 		wc.lpszClassName =
 			className;
