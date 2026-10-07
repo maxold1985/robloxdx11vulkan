@@ -4863,6 +4863,39 @@ bool RobloxObjectModel::applyRenderPartProperties(
 	object->transparency =
 		transparency;
 
+	object->color.r =
+		std::max(
+			0.0,
+			std::min(
+				1.0,
+				static_cast<double>(
+					update.colorR
+				)
+			)
+		);
+
+	object->color.g =
+		std::max(
+			0.0,
+			std::min(
+				1.0,
+				static_cast<double>(
+					update.colorG
+				)
+			)
+		);
+
+	object->color.b =
+		std::max(
+			0.0,
+			std::min(
+				1.0,
+				static_cast<double>(
+					update.colorB
+				)
+			)
+		);
+
 	object->anchored =
 		update.anchored;
 
@@ -4885,6 +4918,12 @@ bool RobloxObjectModel::applyRenderPartProperties(
 		L,
 		object,
 		"Transparency"
+	);
+
+	firePropertyChanged(
+		L,
+		object,
+		"Color"
 	);
 
 	firePropertyChanged(
