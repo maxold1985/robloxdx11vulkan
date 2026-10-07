@@ -12,11 +12,8 @@
 #include <utility>
 #include <vector>
 
-extern "C"
-{
 #include "lua.h"
 #include "lualib.h"
-}
 
 namespace
 {
