@@ -24,6 +24,8 @@ add_executable(roblox_runtime
 	native/src/main.cpp
 	native/src/LuauRuntime.cpp
 	native/src/RobloxApi.cpp
+	native/src/RobloxObjectModel.cpp
+	native/src/RobloxTypes.cpp
 )
 
 target_include_directories(roblox_runtime PRIVATE
