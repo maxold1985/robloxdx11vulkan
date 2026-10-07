@@ -1,9 +1,16 @@
 #include "LuauRuntime.h"
 
+#ifdef _WIN32
+#include "Dx11Renderer.h"
+#endif
+
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace
 {
@@ -41,34 +48,23 @@ namespace
 
 		return result;
 	}
-}
 
-int main(int argc, char** argv)
-{
-	try
+	struct Options
 	{
-		LuauRuntime runtime;
+		bool render = false;
+		int width = 1280;
+		int height = 720;
 
-		if (argc <= 1)
-		{
-			const std::string path =
-				"native/scripts/test.luau";
+		std::vector<std::string> scripts;
+		std::vector<std::string> commands;
+	};
 
-			std::cout
-				<< "[robloxdx11vulkan] running "
-				<< path
-				<< "\n";
-
-			if (!runtime.executeFile(path))
-				return 1;
-
-			runtime.step(1.0 / 60.0);
-
-			std::cout
-				<< "[robloxdx11vulkan] finished\n";
-
-			return 0;
-		}
+	Options parseOptions(
+		int argc,
+		char** argv
+	)
+	{
+		Options options;
 
 		for (
 			int index = 1;
@@ -79,23 +75,121 @@ int main(int argc, char** argv)
 			const std::string argument =
 				argv[index];
 
+			if (argument == "--render")
+			{
+				options.render = true;
+				continue;
+			}
+
+			if (
+				startsWith(
+					argument,
+					"--width="
+				)
+			)
+			{
+				options.width =
+					parsePositiveInt(
+						argument.substr(8),
+						"--width"
+					);
+
+				continue;
+			}
+
+			if (
+				startsWith(
+					argument,
+					"--height="
+				)
+			)
+			{
+				options.height =
+					parsePositiveInt(
+						argument.substr(9),
+						"--height"
+					);
+
+				continue;
+			}
+
 			if (
 				startsWith(
 					argument,
 					"--press="
+				) ||
+				startsWith(
+					argument,
+					"--release="
+				) ||
+				startsWith(
+					argument,
+					"--step="
 				)
 			)
 			{
-				const std::string key =
-					argument.substr(8);
+				options.commands.push_back(
+					argument
+				);
 
-				std::cout
-					<< "[input] press "
-					<< key
-					<< "\n";
+				continue;
+			}
 
+			options.scripts.push_back(
+				argument
+			);
+		}
+
+		return options;
+	}
+
+	bool loadScripts(
+		LuauRuntime& runtime,
+		const std::vector<std::string>& scripts
+	)
+	{
+		for (
+			const std::string& script :
+			scripts
+		)
+		{
+			std::cout
+				<< "[robloxdx11vulkan] running "
+				<< script
+				<< "\n";
+
+			if (
+				!runtime.executeFile(
+					script
+				)
+			)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	bool runCommands(
+		LuauRuntime& runtime,
+		const std::vector<std::string>& commands
+	)
+	{
+		for (
+			const std::string& command :
+			commands
+		)
+		{
+			if (
+				startsWith(
+					command,
+					"--press="
+				)
+			)
+			{
 				runtime.emitKey(
-					key,
+					command.substr(8),
 					true
 				);
 
@@ -104,21 +198,13 @@ int main(int argc, char** argv)
 
 			if (
 				startsWith(
-					argument,
+					command,
 					"--release="
 				)
 			)
 			{
-				const std::string key =
-					argument.substr(10);
-
-				std::cout
-					<< "[input] release "
-					<< key
-					<< "\n";
-
 				runtime.emitKey(
-					key,
+					command.substr(10),
 					false
 				);
 
@@ -127,14 +213,14 @@ int main(int argc, char** argv)
 
 			if (
 				startsWith(
-					argument,
+					command,
 					"--step="
 				)
 			)
 			{
 				const int frames =
 					parsePositiveInt(
-						argument.substr(7),
+						command.substr(7),
 						"--step"
 					);
 
@@ -151,21 +237,165 @@ int main(int argc, char** argv)
 
 				continue;
 			}
+		}
 
-			std::cout
-				<< "[robloxdx11vulkan] running "
-				<< argument
-				<< "\n";
+		return true;
+	}
 
-			if (
-				!runtime.executeFile(
-					argument
-				)
+#ifdef _WIN32
+	int runRenderer(
+		LuauRuntime& runtime,
+		int width,
+		int height
+	)
+	{
+		Dx11Renderer renderer;
+
+		if (
+			!renderer.initialize(
+				L"RobloxDX11Vulkan - Luau Runtime",
+				width,
+				height
+			)
+		)
+		{
+			std::cerr
+				<< "[DX11] failed to initialize renderer\n";
+
+			return 1;
+		}
+
+		renderer.setInputCallback(
+			[
+				&runtime
+			](
+				const std::string& keyCode,
+				bool pressed
 			)
 			{
-				return 1;
+				runtime.emitKey(
+					keyCode,
+					pressed
+				);
+			}
+		);
+
+		using Clock =
+			std::chrono::steady_clock;
+
+		auto previous =
+			Clock::now();
+
+		while (
+			renderer.pumpEvents()
+		)
+		{
+			const auto now =
+				Clock::now();
+
+			double deltaTime =
+				std::chrono::duration<
+					double
+				>(
+					now - previous
+				).count();
+
+			previous = now;
+
+			if (deltaTime < 0.0)
+				deltaTime = 0.0;
+
+			if (deltaTime > 0.1)
+				deltaTime = 0.1;
+
+			runtime.step(
+				deltaTime
+			);
+
+			renderer.render(
+				runtime.getRenderParts(),
+				runtime.getRenderCamera()
+			);
+		}
+
+		return 0;
+	}
+#endif
+}
+
+int main(
+	int argc,
+	char** argv
+)
+{
+	try
+	{
+		LuauRuntime runtime;
+
+		Options options =
+			parseOptions(
+				argc,
+				argv
+			);
+
+		if (
+			options.scripts.empty()
+		)
+		{
+			if (options.render)
+			{
+				options.scripts = {
+					"native/scripts/cube/CubeServer.server.lua",
+					"native/scripts/cube/CubeClient.client.lua"
+				};
+			}
+			else
+			{
+				options.scripts = {
+					"native/scripts/test.luau"
+				};
 			}
 		}
+
+		if (
+			!loadScripts(
+				runtime,
+				options.scripts
+			)
+		)
+		{
+			return 1;
+		}
+
+		if (
+			!runCommands(
+				runtime,
+				options.commands
+			)
+		)
+		{
+			return 1;
+		}
+
+		if (options.render)
+		{
+#ifdef _WIN32
+			return runRenderer(
+				runtime,
+				options.width,
+				options.height
+			);
+#else
+			std::cerr
+				<< "--render currently requires Windows DirectX 11\n";
+
+			return 1;
+#endif
+		}
+
+		runtime.step(
+			1.0 / 60.0
+		);
 
 		std::cout
 			<< "[robloxdx11vulkan] finished\n";
