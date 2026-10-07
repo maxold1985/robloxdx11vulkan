@@ -4292,12 +4292,14 @@ namespace
 		}
 	}
 
-	void collectCollidableParts(
+	void collectWorkspaceParts(
 		RuntimeContext& runtime,
-		std::vector<InstanceObject*>& output
+		std::vector<InstanceObject*>& allParts,
+		std::vector<InstanceObject*>& collidableParts
 	)
 	{
-		output.clear();
+		allParts.clear();
+		collidableParts.clear();
 
 		for (
 			const auto& owned :
@@ -4309,7 +4311,6 @@ namespace
 
 			if (
 				object->destroyed ||
-				!object->canCollide ||
 				!isBasePartClass(
 					object->className
 				) ||
@@ -4322,7 +4323,14 @@ namespace
 				continue;
 			}
 
-			output.push_back(object);
+			allParts.push_back(object);
+
+			if (object->canCollide)
+			{
+				collidableParts.push_back(
+					object
+				);
+			}
 		}
 	}
 
@@ -4332,16 +4340,20 @@ namespace
 	)
 	{
 		std::vector<InstanceObject*>
+			allParts;
+
+		std::vector<InstanceObject*>
 			collidableParts;
 
-		collectCollidableParts(
+		collectWorkspaceParts(
 			runtime,
+			allParts,
 			collidableParts
 		);
 
 		for (
 			InstanceObject* object :
-			collidableParts
+			allParts
 		)
 		{
 			if (object->anchored)
