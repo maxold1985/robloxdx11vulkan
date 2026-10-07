@@ -1,6 +1,9 @@
 #pragma once
 
+#include "RobloxObjectModel.h"
+
 #include <string>
+#include <vector>
 
 struct lua_State;
 
@@ -33,6 +36,13 @@ public:
 		const std::string& keyCodeName,
 		bool pressed
 	);
+
+	std::vector<
+		RobloxObjectModel::RenderPartSnapshot
+	> getRenderParts() const;
+
+	RobloxObjectModel::RenderCameraSnapshot
+	getRenderCamera() const;
 
 private:
 	lua_State* state_;
