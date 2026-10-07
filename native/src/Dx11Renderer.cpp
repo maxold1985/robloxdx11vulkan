@@ -6,8 +6,6 @@
 #include <Windows.h>
 
 #include <d3d11.h>
-#include <d3dcompiler.h>
-
 #include "ComPtrLite.h"
 #include "DirectXMathLite.h"
 
@@ -17,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <iterator>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -76,123 +75,138 @@ namespace
 		20, 21, 22, 20, 22, 23,
 	};
 
-	const char* VERTEX_SHADER_SOURCE = R"(
-cbuffer ObjectBuffer : register(b0)
-{
-	row_major float4x4 World;
-	row_major float4x4 ViewProjection;
-	float4 ObjectColor;
-};
+	std::wstring executableDirectory()
+	{
+		wchar_t path[32768] = {};
 
-struct VSInput
-{
-	float3 Position : POSITION;
-	float3 Normal : NORMAL;
-};
+		const DWORD length =
+			GetModuleFileNameW(
+				nullptr,
+				path,
+				static_cast<DWORD>(
+					std::size(path)
+				)
+			);
 
-struct VSOutput
-{
-	float4 Position : SV_POSITION;
-	float3 Normal : TEXCOORD0;
-};
+		if (
+			length == 0 ||
+			length >= std::size(path)
+		)
+		{
+			return L".";
+		}
 
-VSOutput main(VSInput input)
-{
-	VSOutput output;
-
-	float4 worldPosition =
-		mul(float4(input.Position, 1.0f), World);
-
-	output.Position =
-		mul(worldPosition, ViewProjection);
-
-	output.Normal =
-		normalize(
-			mul(
-				float4(input.Normal, 0.0f),
-				World
-			).xyz
+		std::wstring result(
+			path,
+			path + length
 		);
 
-	return output;
-}
-)";
+		const std::wstring::size_type slash =
+			result.find_last_of(
+				L"\\/"
+			);
 
-	const char* PIXEL_SHADER_SOURCE = R"(
-cbuffer ObjectBuffer : register(b0)
-{
-	row_major float4x4 World;
-	row_major float4x4 ViewProjection;
-	float4 ObjectColor;
-};
+		if (
+			slash ==
+			std::wstring::npos
+		)
+		{
+			return L".";
+		}
 
-struct PSInput
-{
-	float4 Position : SV_POSITION;
-	float3 Normal : TEXCOORD0;
-};
+		result.resize(slash);
+		return result;
+	}
 
-float4 main(PSInput input) : SV_TARGET
-{
-	const float3 lightDirection =
-		normalize(float3(-0.4f, 0.8f, -0.6f));
+	std::wstring shaderPath(
+		const wchar_t* fileName
+	)
+	{
+		std::wstring result =
+			executableDirectory();
 
-	float lighting =
-		saturate(
-			dot(
-				normalize(input.Normal),
-				lightDirection
+		result += L"\\shaders\\";
+		result += fileName;
+
+		return result;
+	}
+
+	bool loadBinaryFile(
+		const std::wstring& path,
+		std::vector<std::uint8_t>& output
+	)
+	{
+		HANDLE file =
+			CreateFileW(
+				path.c_str(),
+				GENERIC_READ,
+				FILE_SHARE_READ,
+				nullptr,
+				OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				nullptr
+			);
+
+		if (
+			file ==
+			INVALID_HANDLE_VALUE
+		)
+		{
+			std::fwprintf(
+				stderr,
+				L"[DX11 shader] arquivo nao encontrado: %ls\\n",
+				path.c_str()
+			);
+
+			return false;
+		}
+
+		LARGE_INTEGER fileSize{};
+
+		if (
+			!GetFileSizeEx(
+				file,
+				&fileSize
+			) ||
+			fileSize.QuadPart <= 0 ||
+			fileSize.QuadPart >
+				static_cast<LONGLONG>(
+					0xffffffffu
+				)
+		)
+		{
+			CloseHandle(file);
+			return false;
+		}
+
+		output.resize(
+			static_cast<std::size_t>(
+				fileSize.QuadPart
 			)
 		);
 
-	lighting =
-		0.35f +
-		lighting * 0.65f;
+		DWORD bytesRead = 0;
 
-	return float4(
-		ObjectColor.rgb * lighting,
-		ObjectColor.a
-	);
-}
-)";
-
-	bool compileShader(
-		const char* source,
-		const char* entryPoint,
-		const char* target,
-		ComPtr<ID3DBlob>& bytecode
-	)
-	{
-		ComPtr<ID3DBlob> errors;
-
-		const HRESULT hr =
-			D3DCompile(
-				source,
-				std::strlen(source),
-				nullptr,
-				nullptr,
-				nullptr,
-				entryPoint,
-				target,
-				D3DCOMPILE_ENABLE_STRICTNESS,
-				0,
-				&bytecode,
-				&errors
+		const BOOL ok =
+			ReadFile(
+				file,
+				output.data(),
+				static_cast<DWORD>(
+					output.size()
+				),
+				&bytesRead,
+				nullptr
 			);
 
-		if (FAILED(hr))
-		{
-			if (errors)
-			{
-				std::fprintf(
-					stderr,
-					"[DX11 shader] %s\n",
-					static_cast<const char*>(
-						errors->GetBufferPointer()
-					)
-				);
-			}
+		CloseHandle(file);
 
+		if (
+			!ok ||
+			bytesRead !=
+				output.size()
+		)
+		{
+			output.clear();
 			return false;
 		}
 
@@ -561,14 +575,15 @@ struct Dx11Renderer::Impl
 
 	bool createPipeline()
 	{
-		ComPtr<ID3DBlob> vertexBytecode;
-		ComPtr<ID3DBlob> pixelBytecode;
+		std::vector<std::uint8_t>
+			vertexBytecode;
+
+		std::vector<std::uint8_t>
+			pixelBytecode;
 
 		if (
-			!compileShader(
-				VERTEX_SHADER_SOURCE,
-				"main",
-				"vs_4_0",
+			!loadBinaryFile(
+				shaderPath(L"CubeVS.cso"),
 				vertexBytecode
 			)
 		)
@@ -577,10 +592,8 @@ struct Dx11Renderer::Impl
 		}
 
 		if (
-			!compileShader(
-				PIXEL_SHADER_SOURCE,
-				"main",
-				"ps_4_0",
+			!loadBinaryFile(
+				shaderPath(L"CubePS.cso"),
 				pixelBytecode
 			)
 		)
@@ -590,8 +603,8 @@ struct Dx11Renderer::Impl
 
 		HRESULT hr =
 			device->CreateVertexShader(
-				vertexBytecode->GetBufferPointer(),
-				vertexBytecode->GetBufferSize(),
+				vertexBytecode.data(),
+				vertexBytecode.size(),
 				nullptr,
 				&vertexShader
 			);
@@ -601,8 +614,8 @@ struct Dx11Renderer::Impl
 
 		hr =
 			device->CreatePixelShader(
-				pixelBytecode->GetBufferPointer(),
-				pixelBytecode->GetBufferSize(),
+				pixelBytecode.data(),
+				pixelBytecode.size(),
 				nullptr,
 				&pixelShader
 			);
@@ -637,8 +650,8 @@ struct Dx11Renderer::Impl
 				static_cast<UINT>(
 					std::size(layout)
 				),
-				vertexBytecode->GetBufferPointer(),
-				vertexBytecode->GetBufferSize(),
+				vertexBytecode.data(),
+				vertexBytecode.size(),
 				&inputLayout
 			);
 
