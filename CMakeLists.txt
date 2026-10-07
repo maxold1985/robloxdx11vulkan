@@ -81,6 +81,7 @@ add_test(
 if(WIN32)
 	target_sources(roblox_runtime PRIVATE
 		native/src/Dx11Renderer.cpp
+		native/src/PropertiesWindow.cpp
 	)
 
 	target_link_libraries(roblox_runtime PRIVATE
