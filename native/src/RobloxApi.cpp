@@ -1,5 +1,6 @@
 #include "RobloxApi.h"
 #include "RobloxObjectModel.h"
+#include "RobloxScheduler.h"
 #include "RobloxTypes.h"
 
 #include <cstdio>
@@ -120,6 +121,7 @@ namespace
 void RobloxApi::install(lua_State* L)
 {
 	RobloxTypes::install(L);
+	RobloxScheduler::install(L);
 	RobloxObjectModel::install(L);
 
 	lua_pushcfunction(
@@ -140,6 +142,7 @@ void RobloxApi::install(lua_State* L)
 void RobloxApi::shutdown(lua_State* L)
 {
 	RobloxObjectModel::shutdown(L);
+	RobloxScheduler::shutdown(L);
 }
 
 void RobloxApi::step(
@@ -148,6 +151,11 @@ void RobloxApi::step(
 )
 {
 	RobloxObjectModel::step(
+		L,
+		deltaTime
+	);
+
+	RobloxScheduler::step(
 		L,
 		deltaTime
 	);
