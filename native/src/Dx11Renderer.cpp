@@ -2,6 +2,7 @@
 
 #include "Dx11Renderer.h"
 #include "EngineLog.h"
+#include "PropertiesWindow.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -302,6 +303,9 @@ struct Dx11Renderer::Impl
 	bool running = false;
 
 	InputCallback inputCallback;
+	PropertyCallback propertyCallback;
+
+	PropertiesWindow propertiesWindow;
 
 	struct LogButton
 	{
@@ -341,6 +345,9 @@ struct Dx11Renderer::Impl
 
 	ComPtr<ID3D11RasterizerState> rasterizerState;
 	ComPtr<ID3D11BlendState> blendState;
+
+	static constexpr int MENU_PROPERTIES =
+		4300;
 
 	static constexpr int LOG_BUTTON_BASE =
 		4100;
@@ -834,6 +841,73 @@ struct Dx11Renderer::Impl
 		SetFocus(window);
 	}
 
+	bool createMenuBar()
+	{
+		HMENU menuBar =
+			CreateMenu();
+
+		HMENU viewMenu =
+			CreatePopupMenu();
+
+		if (
+			!menuBar ||
+			!viewMenu
+		)
+		{
+			if (viewMenu)
+				DestroyMenu(viewMenu);
+
+			if (menuBar)
+				DestroyMenu(menuBar);
+
+			return false;
+		}
+
+		if (
+			!AppendMenuW(
+				viewMenu,
+				MF_STRING,
+				MENU_PROPERTIES,
+				L"Properties"
+			)
+		)
+		{
+			DestroyMenu(viewMenu);
+			DestroyMenu(menuBar);
+			return false;
+		}
+
+		if (
+			!AppendMenuW(
+				menuBar,
+				MF_POPUP,
+				reinterpret_cast<UINT_PTR>(
+					viewMenu
+				),
+				L"View"
+			)
+		)
+		{
+			DestroyMenu(viewMenu);
+			DestroyMenu(menuBar);
+			return false;
+		}
+
+		if (
+			!SetMenu(
+				window,
+				menuBar
+			)
+		)
+		{
+			DestroyMenu(menuBar);
+			return false;
+		}
+
+		DrawMenuBar(window);
+		return true;
+	}
+
 	static LRESULT CALLBACK windowProc(
 		HWND hwnd,
 		UINT message,
@@ -872,6 +946,16 @@ struct Dx11Renderer::Impl
 
 		if (self)
 		{
+			if (
+				message == WM_COMMAND &&
+				LOWORD(wParam) ==
+					MENU_PROPERTIES
+			)
+			{
+				self->propertiesWindow.show();
+				return 0;
+			}
+
 			if (
 				message == WM_COMMAND &&
 				HIWORD(wParam) ==
@@ -1026,6 +1110,25 @@ struct Dx11Renderer::Impl
 
 		if (!window)
 			return false;
+
+		if (!createMenuBar())
+			return false;
+
+		if (
+			!propertiesWindow.initialize(
+				window
+			)
+		)
+		{
+			return false;
+		}
+
+		if (propertyCallback)
+		{
+			propertiesWindow.setApplyCallback(
+				propertyCallback
+			);
+		}
 
 		if (!createLogPanel())
 			return false;
@@ -1675,6 +1778,19 @@ void Dx11Renderer::setInputCallback(
 		std::move(callback);
 }
 
+void Dx11Renderer::setPropertyCallback(
+	PropertyCallback callback
+)
+{
+	impl_->propertyCallback =
+		std::move(callback);
+
+	impl_->propertiesWindow
+		.setApplyCallback(
+			impl_->propertyCallback
+		);
+}
+
 bool Dx11Renderer::pumpEvents()
 {
 	MSG message{};
@@ -1712,6 +1828,10 @@ void Dx11Renderer::render(
 {
 	if (!impl_->running)
 		return;
+
+	impl_->propertiesWindow.setParts(
+		parts
+	);
 
 	if (
 		impl_->lastRenderedPartCount !=
