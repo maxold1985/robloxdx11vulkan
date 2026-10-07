@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cwchar>
+#include <cwctype>
 #include <string>
 #include <utility>
 
