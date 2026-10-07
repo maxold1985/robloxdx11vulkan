@@ -62,3 +62,18 @@ add_test(
 		--step=2
 		${CMAKE_CURRENT_SOURCE_DIR}/native/scripts/cube/CubeVerify.luau
 )
+
+
+if(WIN32)
+	target_sources(roblox_runtime PRIVATE
+		native/src/Dx11Renderer.cpp
+	)
+
+	target_link_libraries(roblox_runtime PRIVATE
+		d3d11
+		dxgi
+		d3dcompiler
+		user32
+		gdi32
+	)
+endif()
