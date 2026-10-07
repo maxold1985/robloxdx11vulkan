@@ -40,3 +40,12 @@ target_link_libraries(roblox_runtime PRIVATE
 if(MSVC)
 	target_compile_definitions(roblox_runtime PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
+
+
+enable_testing()
+
+add_test(
+	NAME roblox_runtime_smoke
+	COMMAND roblox_runtime
+		${CMAKE_CURRENT_SOURCE_DIR}/native/scripts/test.luau
+)
