@@ -207,6 +207,11 @@ namespace
 				path.c_str()
 			);
 
+			EngineLog::write(
+				EngineLog::Component::Renderer,
+				"shader file not found"
+			);
+
 			return false;
 		}
 
@@ -1080,6 +1085,14 @@ struct Dx11Renderer::Impl
 
 		if (FAILED(hr))
 		{
+			EngineLog::writef(
+				EngineLog::Component::Renderer,
+				"D3D11CreateDeviceAndSwapChain failed 0x%08lx",
+				static_cast<unsigned long>(
+					hr
+				)
+			);
+
 			std::fprintf(
 				stderr,
 				"[DX11] D3D11CreateDeviceAndSwapChain failed: 0x%08lx\n",
@@ -1191,6 +1204,11 @@ struct Dx11Renderer::Impl
 		if (FAILED(hr))
 			return false;
 
+		EngineLog::write(
+			EngineLog::Component::Renderer,
+			"vertex shader loaded"
+		);
+
 		hr =
 			device->CreatePixelShader(
 				pixelBytecode.data(),
@@ -1201,6 +1219,11 @@ struct Dx11Renderer::Impl
 
 		if (FAILED(hr))
 			return false;
+
+		EngineLog::write(
+			EngineLog::Component::Renderer,
+			"pixel shader loaded"
+		);
 
 		const D3D11_INPUT_ELEMENT_DESC layout[] = {
 			{
