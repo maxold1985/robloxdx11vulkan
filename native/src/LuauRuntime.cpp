@@ -32,7 +32,10 @@ LuauRuntime::LuauRuntime()
 LuauRuntime::~LuauRuntime()
 {
 	if (state_)
+	{
+		RobloxApi::shutdown(state_);
 		lua_close(state_);
+	}
 }
 
 bool LuauRuntime::execute(const std::string& source, const std::string& chunkName)
