@@ -3465,6 +3465,121 @@ namespace
 		);
 	}
 
+	int signalWaitResume(lua_State* L)
+	{
+		lua_State* waiter =
+			static_cast<lua_State*>(
+				lua_tolightuserdata(
+					L,
+					lua_upvalueindex(1)
+				)
+			);
+
+		if (
+			!waiter ||
+			!RobloxScheduler::isManaged(
+				L,
+				waiter
+			)
+		)
+		{
+			return 0;
+		}
+
+		const int argumentCount =
+			lua_gettop(L);
+
+		for (
+			int index = 1;
+			index <= argumentCount;
+			++index
+		)
+		{
+			lua_xpush(
+				L,
+				waiter,
+				index
+			);
+		}
+
+		RobloxScheduler::resume(
+			L,
+			waiter,
+			argumentCount
+		);
+
+		return 0;
+	}
+
+	int signalWait(lua_State* L)
+	{
+		SignalUserdata* signal =
+			checkSignal(L, 1);
+
+		if (!lua_isyieldable(L))
+		{
+			luaL_error(
+				L,
+				"RBXScriptSignal:Wait cannot yield from this context"
+			);
+		}
+
+		if (
+			!signal->object ||
+			signal->object->destroyed
+		)
+		{
+			luaL_error(
+				L,
+				"Cannot wait on a destroyed Instance signal"
+			);
+		}
+
+		RobloxScheduler::suspend(L);
+
+		lua_pushlightuserdata(
+			L,
+			L
+		);
+
+		lua_pushcclosure(
+			L,
+			signalWaitResume,
+			"RBXScriptSignal.WaitResume",
+			1
+		);
+
+		auto connection =
+			std::make_unique<
+				ConnectionState
+			>();
+
+		connection->callbackRef =
+			lua_ref(L, -1);
+
+		lua_pop(L, 1);
+
+		connection->connected = true;
+		connection->once = true;
+
+		ConnectionState* raw =
+			connection.get();
+
+		signal->object
+			->ownedConnections
+			.push_back(
+				std::move(connection)
+			);
+
+		signal->object
+			->signals[
+				signal->eventName
+			]
+			.push_back(raw);
+
+		return lua_yield(L, 0);
+	}
+
 	int signalIndex(lua_State* L)
 	{
 		checkSignal(L, 1);
@@ -3496,10 +3611,13 @@ namespace
 
 		if (key == "Wait")
 		{
-			luaL_error(
+			lua_pushcfunction(
 				L,
-				"RBXScriptSignal:Wait requires scheduler coroutine support"
+				signalWait,
+				"RBXScriptSignal.Wait"
 			);
+
+			return 1;
 		}
 
 		luaL_error(
