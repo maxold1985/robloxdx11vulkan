@@ -440,6 +440,11 @@ namespace
 
 	int taskSpawn(lua_State* L)
 	{
+		EngineLog::write(
+			EngineLog::Component::Scheduler,
+			"scheduler task.spawn"
+		);
+
 		luaL_checktype(
 			L,
 			1,
@@ -476,6 +481,11 @@ namespace
 
 	int taskDefer(lua_State* L)
 	{
+		EngineLog::write(
+			EngineLog::Component::Scheduler,
+			"scheduler task.defer"
+		);
+
 		luaL_checktype(
 			L,
 			1,
@@ -562,6 +572,11 @@ namespace
 
 	int taskCancel(lua_State* L)
 	{
+		EngineLog::write(
+			EngineLog::Component::Scheduler,
+			"scheduler task.cancel"
+		);
+
 		lua_State* thread =
 			lua_tothread(L, 1);
 
