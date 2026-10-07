@@ -280,6 +280,23 @@ namespace
 			}
 		);
 
+		renderer.setPropertyCallback(
+			[
+				&runtime
+			](
+				const RobloxObjectModel::
+					RenderPartPropertyUpdate&
+						update
+			)
+			{
+				return
+					runtime
+						.applyRenderPartProperties(
+							update
+						);
+			}
+		);
+
 		using Clock =
 			std::chrono::steady_clock;
 
