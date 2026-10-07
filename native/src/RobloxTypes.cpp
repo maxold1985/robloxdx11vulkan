@@ -5,11 +5,8 @@
 #include <cstring>
 #include <string>
 
-extern "C"
-{
 #include "lua.h"
 #include "lualib.h"
-}
 
 namespace
 {
