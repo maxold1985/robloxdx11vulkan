@@ -22,6 +22,8 @@ function ScriptRuntime.new()
 end
 
 function ScriptRuntime:Register(descriptor)
+	assert(type(descriptor) == "table", "Runtime descriptor must be a table")
+	descriptor.Dependencies = descriptor.Dependencies or {}
 	validateDependencies(descriptor)
 	self.Registry:Register(descriptor)
 	table.clear(self._resolved)
