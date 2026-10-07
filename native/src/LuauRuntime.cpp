@@ -1,5 +1,6 @@
 #include "LuauRuntime.h"
 #include "RobloxApi.h"
+#include "RobloxScheduler.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -107,12 +108,23 @@ bool LuauRuntime::execute(
 
 	if (status == LUA_YIELD)
 	{
-		std::cerr
-			<< "[Luau] script yielded, but scheduler support "
-			<< "has not been enabled yet\n";
+		const bool managed =
+			RobloxScheduler::isManaged(
+				state_,
+				thread
+			);
 
 		lua_pop(state_, 1);
-		return false;
+
+		if (!managed)
+		{
+			std::cerr
+				<< "[Luau] script yielded outside the runtime scheduler\n";
+
+			return false;
+		}
+
+		return true;
 	}
 
 	if (status != LUA_OK)
