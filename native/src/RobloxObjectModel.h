@@ -27,10 +27,6 @@ namespace RobloxObjectModel
 
 		float transparency = 0.0f;
 
-		float colorR = 0.5f;
-		float colorG = 0.5f;
-		float colorB = 0.5f;
-
 		bool anchored = false;
 		bool canCollide = true;
 	};
@@ -46,6 +42,10 @@ namespace RobloxObjectModel
 		float sizeX = 1.0f;
 		float sizeY = 1.0f;
 		float sizeZ = 1.0f;
+
+		float colorR = 0.5f;
+		float colorG = 0.5f;
+		float colorB = 0.5f;
 
 		float transparency = 0.0f;
 
