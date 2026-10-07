@@ -3249,11 +3249,25 @@ namespace
 
 	int instanceNew(lua_State* L)
 	{
+		const int argumentCount =
+			lua_gettop(L);
+
 		const std::string className =
 			luaL_checkstring(L, 1);
 
 		RuntimeContext& runtime =
 			context(L);
+
+		InstanceObject* parent = nullptr;
+
+		if (
+			argumentCount >= 2 &&
+			!lua_isnil(L, 2)
+		)
+		{
+			parent =
+				checkInstance(L, 2);
+		}
 
 		InstanceObject* object =
 			createObject(
@@ -3261,13 +3275,8 @@ namespace
 				className
 			);
 
-		pushInstance(L, object);
-
-		if (!lua_isnoneornil(L, 2))
+		if (parent)
 		{
-			InstanceObject* parent =
-				checkInstance(L, 2);
-
 			setParent(
 				L,
 				object,
@@ -3275,6 +3284,7 @@ namespace
 			);
 		}
 
+		pushInstance(L, object);
 		return 1;
 	}
 
