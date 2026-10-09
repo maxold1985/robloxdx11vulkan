@@ -150,3 +150,84 @@ if(WIN32)
 		VERBATIM
 	)
 endif()
+
+
+option(
+	ROBLOX_BUILD_GLES32
+	"Build the EGL/X11 OpenGL ES 3.2 backend"
+	ON
+)
+
+if(
+	UNIX AND
+	NOT APPLE AND
+	ROBLOX_BUILD_GLES32
+)
+	find_package(X11 QUIET)
+
+	find_path(
+		EGL_INCLUDE_DIR
+		NAMES EGL/egl.h
+	)
+
+	find_path(
+		GLES32_INCLUDE_DIR
+		NAMES GLES3/gl32.h
+	)
+
+	find_library(
+		EGL_LIBRARY
+		NAMES EGL
+	)
+
+	find_library(
+		GLES_LIBRARY
+		NAMES GLESv2 GLESv3
+	)
+
+	if(
+		X11_FOUND AND
+		EGL_INCLUDE_DIR AND
+		GLES32_INCLUDE_DIR AND
+		EGL_LIBRARY AND
+		GLES_LIBRARY
+	)
+		target_sources(
+			roblox_runtime
+			PRIVATE
+				native/src/Gles32Renderer.cpp
+		)
+
+		target_include_directories(
+			roblox_runtime
+			PRIVATE
+				${EGL_INCLUDE_DIR}
+				${GLES32_INCLUDE_DIR}
+				${X11_INCLUDE_DIR}
+		)
+
+		target_link_libraries(
+			roblox_runtime
+			PRIVATE
+				${EGL_LIBRARY}
+				${GLES_LIBRARY}
+				${X11_LIBRARIES}
+		)
+
+		target_compile_definitions(
+			roblox_runtime
+			PRIVATE
+				ROBLOX_HAS_GLES32=1
+		)
+
+		message(
+			STATUS
+			"OpenGL ES 3.2 backend enabled"
+		)
+	else()
+		message(
+			WARNING
+			"OpenGL ES 3.2 backend disabled: install X11, EGL and GLES3 development headers/libraries"
+		)
+	endif()
+endif()
