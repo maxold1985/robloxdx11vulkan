@@ -4,6 +4,10 @@
 #include "Dx11Renderer.h"
 #endif
 
+#if defined(ROBLOX_HAS_GLES32)
+#include "Gles32Renderer.h"
+#endif
+
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -52,6 +56,7 @@ namespace
 	struct Options
 	{
 		bool render = false;
+		bool renderGles = false;
 		int width = 1280;
 		int height = 720;
 
@@ -78,6 +83,16 @@ namespace
 			if (argument == "--render")
 			{
 				options.render = true;
+				continue;
+			}
+
+			if (
+				argument ==
+				"--render-gles"
+			)
+			{
+				options.render = true;
+				options.renderGles = true;
 				continue;
 			}
 
@@ -338,6 +353,86 @@ namespace
 		return 0;
 	}
 #endif
+
+#if defined(ROBLOX_HAS_GLES32)
+	int runGlesRenderer(
+		LuauRuntime& runtime,
+		int width,
+		int height
+	)
+	{
+		Gles32Renderer renderer;
+
+		if (
+			!renderer.initialize(
+				"RobloxDX11Vulkan - OpenGL ES 3.2",
+				width,
+				height
+			)
+		)
+		{
+			std::cerr
+				<< "[GLES32] failed to initialize renderer\n";
+
+			return 1;
+		}
+
+		renderer.setInputCallback(
+			[
+				&runtime
+			](
+				const std::string& keyCode,
+				bool pressed
+			)
+			{
+				runtime.emitKey(
+					keyCode,
+					pressed
+				);
+			}
+		);
+
+		using Clock =
+			std::chrono::steady_clock;
+
+		auto previous =
+			Clock::now();
+
+		while (
+			renderer.pumpEvents()
+		)
+		{
+			const auto now =
+				Clock::now();
+
+			double deltaTime =
+				std::chrono::duration<
+					double
+				>(
+					now - previous
+				).count();
+
+			previous = now;
+
+			if (deltaTime < 0.0)
+				deltaTime = 0.0;
+
+			if (deltaTime > 0.1)
+				deltaTime = 0.1;
+
+			runtime.step(
+				deltaTime
+			);
+
+			renderer.render(
+				runtime.getRenderParts(),
+				runtime.getRenderCamera()
+			);
+		}
+
+		return 0;
+	}
+#endif
 }
 
 int main(
@@ -396,15 +491,37 @@ int main(
 
 		if (options.render)
 		{
+			if (options.renderGles)
+			{
+#if defined(ROBLOX_HAS_GLES32)
+				return runGlesRenderer(
+					runtime,
+					options.width,
+					options.height
+				);
+#else
+				std::cerr
+					<< "--render-gles requested, but the GLES 3.2 backend was not built\n";
+
+				return 1;
+#endif
+			}
+
 #ifdef _WIN32
 			return runRenderer(
 				runtime,
 				options.width,
 				options.height
 			);
+#elif defined(ROBLOX_HAS_GLES32)
+			return runGlesRenderer(
+				runtime,
+				options.width,
+				options.height
+			);
 #else
 			std::cerr
-				<< "--render currently requires Windows DirectX 11\n";
+				<< "--render requires DX11 on Windows or the EGL/X11 GLES 3.2 backend\n";
 
 			return 1;
 #endif
