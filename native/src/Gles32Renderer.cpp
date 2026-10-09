@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <utility>
@@ -955,28 +956,42 @@ struct Gles32Renderer::Impl
 		}
 
 #if defined(EGL_CONTEXT_MAJOR_VERSION_KHR) && defined(EGL_CONTEXT_MINOR_VERSION_KHR)
-		const EGLint contextAttributes[] = {
+		const EGLint contextAttributes32[] = {
 			EGL_CONTEXT_MAJOR_VERSION_KHR,
 			3,
 			EGL_CONTEXT_MINOR_VERSION_KHR,
 			2,
 			EGL_NONE
 		};
-#else
-		const EGLint contextAttributes[] = {
-			EGL_CONTEXT_CLIENT_VERSION,
-			3,
-			EGL_NONE
-		};
-#endif
 
 		eglContext =
 			eglCreateContext(
 				eglDisplay,
 				eglConfig,
 				EGL_NO_CONTEXT,
-				contextAttributes
+				contextAttributes32
 			);
+#endif
+
+		if (
+			eglContext ==
+			EGL_NO_CONTEXT
+		)
+		{
+			const EGLint contextAttributes3[] = {
+				EGL_CONTEXT_CLIENT_VERSION,
+				3,
+				EGL_NONE
+			};
+
+			eglContext =
+				eglCreateContext(
+					eglDisplay,
+					eglConfig,
+					EGL_NO_CONTEXT,
+					contextAttributes3
+				);
+		}
 
 		if (
 			eglContext ==
