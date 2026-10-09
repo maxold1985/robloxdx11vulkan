@@ -162,3 +162,80 @@ build\Release\roblox_runtime.exe --render native\scripts\cube\CubeServer.server.
 Se `--render` for usado sem scripts, esses dois arquivos são carregados automaticamente.
 
 O renderer atual é propositalmente mínimo: `Part` é desenhado como box sem rotação. `CFrame`, meshes, texturas, iluminação Roblox completa, materiais e Vulkan serão camadas posteriores.
+
+
+## Backend OpenGL ES 3.2
+
+Em sistemas Unix com X11, EGL e headers GLES3 disponíveis, o runtime também compila o backend `Gles32Renderer`.
+
+Fluxo:
+
+```text
+Luau / Workspace
+        |
+        v
+RenderPartSnapshot
+        |
+        v
+Gles32Renderer
+        |
+        +-- X11 window
+        +-- EGL
+        +-- OpenGL ES 3.2
+        +-- GLSL ES 320
+```
+
+O backend GLES 3.2 possui atualmente:
+
+- janela X11
+- contexto EGL OpenGL ES
+- validação de que o contexto expõe OpenGL ES 3.2 ou superior
+- cubos para `BasePart`
+- `Position`, `Size`, `Color` e `Transparency`
+- depth test
+- alpha blending
+- iluminação direcional simples
+- grid de debug
+- câmera seguindo `CameraSubject`
+- input W/A/S/D/Space
+- resize da viewport
+
+### Termux / Acode + Termux:X11
+
+Instale as dependências no Termux:
+
+```sh
+pkg update
+pkg install x11-repo
+pkg install git cmake ninja clang libx11 mesa
+```
+
+Com o Termux:X11 iniciado, configure o display conforme sua instalação. O valor comum é:
+
+```sh
+export DISPLAY=:0
+```
+
+Build:
+
+```sh
+chmod +x build_termux_gles.sh
+./build_termux_gles.sh
+```
+
+Executar o exemplo:
+
+```sh
+chmod +x run_cube_gles.sh
+./run_cube_gles.sh
+```
+
+Ou diretamente:
+
+```sh
+./build_gles32/roblox_runtime --render-gles
+```
+
+No Windows, `--render` continua usando DirectX 11. Em Unix, quando o backend GLES foi encontrado pelo CMake, `--render` usa GLES 3.2 automaticamente.
+
+O backend atual usa X11 para criar a janela. Ele é adequado para Termux:X11/Linux. Um backend Android nativo baseado em `ANativeWindow` para APK será uma camada separada.
