@@ -7,6 +7,7 @@
 #include <EGL/eglext.h>
 #include <GLES3/gl32.h>
 #include <X11/Xlib.h>
+#include <X11/Xutil.h>
 #include <X11/keysym.h>
 
 #include <algorithm>
@@ -611,7 +612,9 @@ struct Gles32Renderer::Impl
 {
 	Display* xDisplay = nullptr;
 	Window xWindow = 0;
+	Colormap xColormap = 0;
 	Atom wmDelete = 0;
+	EGLint nativeVisualId = 0;
 
 	EGLDisplay eglDisplay =
 		EGL_NO_DISPLAY;
@@ -644,9 +647,7 @@ struct Gles32Renderer::Impl
 	GLint viewProjectionLocation = -1;
 	GLint colorLocation = -1;
 
-	bool createX11Window(
-		const char* title
-	)
+	bool createDisplayAndConfig()
 	{
 		xDisplay =
 			XOpenDisplay(nullptr);
@@ -661,84 +662,6 @@ struct Gles32Renderer::Impl
 			return false;
 		}
 
-		const int screen =
-			DefaultScreen(xDisplay);
-
-		const Window root =
-			RootWindow(
-				xDisplay,
-				screen
-			);
-
-		xWindow =
-			XCreateSimpleWindow(
-				xDisplay,
-				root,
-				0,
-				0,
-				static_cast<unsigned int>(
-					width
-				),
-				static_cast<unsigned int>(
-					height
-				),
-				0,
-				BlackPixel(
-					xDisplay,
-					screen
-				),
-				BlackPixel(
-					xDisplay,
-					screen
-				)
-			);
-
-		if (!xWindow)
-			return false;
-
-		XStoreName(
-			xDisplay,
-			xWindow,
-			title
-				? title
-				: "Roblox GLES 3.2"
-		);
-
-		XSelectInput(
-			xDisplay,
-			xWindow,
-			ExposureMask |
-			KeyPressMask |
-			KeyReleaseMask |
-			StructureNotifyMask
-		);
-
-		wmDelete =
-			XInternAtom(
-				xDisplay,
-				"WM_DELETE_WINDOW",
-				False
-			);
-
-		XSetWMProtocols(
-			xDisplay,
-			xWindow,
-			&wmDelete,
-			1
-		);
-
-		XMapWindow(
-			xDisplay,
-			xWindow
-		);
-
-		XFlush(xDisplay);
-
-		return true;
-	}
-
-	bool createEgl()
-	{
 		eglDisplay =
 			eglGetDisplay(
 				reinterpret_cast<
@@ -761,14 +684,14 @@ struct Gles32Renderer::Impl
 			return false;
 		}
 
-		EGLint major = 0;
-		EGLint minor = 0;
+		EGLint eglMajor = 0;
+		EGLint eglMinor = 0;
 
 		if (
 			eglInitialize(
 				eglDisplay,
-				&major,
-				&minor
+				&eglMajor,
+				&eglMinor
 			) != EGL_TRUE
 		)
 		{
@@ -786,6 +709,11 @@ struct Gles32Renderer::Impl
 			) != EGL_TRUE
 		)
 		{
+			EngineLog::write(
+				EngineLog::Component::Renderer,
+				"eglBindAPI OpenGL ES failed"
+			);
+
 			return false;
 		}
 
@@ -835,6 +763,169 @@ struct Gles32Renderer::Impl
 			return false;
 		}
 
+		if (
+			eglGetConfigAttrib(
+				eglDisplay,
+				eglConfig,
+				EGL_NATIVE_VISUAL_ID,
+				&nativeVisualId
+			) != EGL_TRUE
+		)
+		{
+			EngineLog::write(
+				EngineLog::Component::Renderer,
+				"eglGetConfigAttrib EGL_NATIVE_VISUAL_ID failed"
+			);
+
+			return false;
+		}
+
+		EngineLog::writef(
+			EngineLog::Component::Renderer,
+			"EGL %d.%d visual=%d",
+			eglMajor,
+			eglMinor,
+			nativeVisualId
+		);
+
+		return true;
+	}
+
+	bool createX11Window(
+		const char* title
+	)
+	{
+		if (!xDisplay)
+			return false;
+
+		const int screen =
+			DefaultScreen(xDisplay);
+
+		XVisualInfo visualTemplate{};
+		visualTemplate.visualid =
+			static_cast<VisualID>(
+				nativeVisualId
+			);
+		visualTemplate.screen =
+			screen;
+
+		int visualCount = 0;
+
+		XVisualInfo* visualInfo =
+			XGetVisualInfo(
+				xDisplay,
+				VisualIDMask |
+					VisualScreenMask,
+				&visualTemplate,
+				&visualCount
+			);
+
+		if (
+			!visualInfo ||
+			visualCount < 1
+		)
+		{
+			if (visualInfo)
+				XFree(visualInfo);
+
+			EngineLog::write(
+				EngineLog::Component::Renderer,
+				"XGetVisualInfo for EGL visual failed"
+			);
+
+			return false;
+		}
+
+		const Window root =
+			RootWindow(
+				xDisplay,
+				screen
+			);
+
+		xColormap =
+			XCreateColormap(
+				xDisplay,
+				root,
+				visualInfo->visual,
+				AllocNone
+			);
+
+		XSetWindowAttributes attributes{};
+		attributes.colormap =
+			xColormap;
+		attributes.event_mask =
+			ExposureMask |
+			KeyPressMask |
+			KeyReleaseMask |
+			StructureNotifyMask;
+
+		xWindow =
+			XCreateWindow(
+				xDisplay,
+				root,
+				0,
+				0,
+				static_cast<unsigned int>(
+					width
+				),
+				static_cast<unsigned int>(
+					height
+				),
+				0,
+				visualInfo->depth,
+				InputOutput,
+				visualInfo->visual,
+				CWColormap |
+					CWEventMask,
+				&attributes
+			);
+
+		XFree(visualInfo);
+
+		if (!xWindow)
+		{
+			EngineLog::write(
+				EngineLog::Component::Renderer,
+				"XCreateWindow failed"
+			);
+
+			return false;
+		}
+
+		XStoreName(
+			xDisplay,
+			xWindow,
+			title
+				? title
+				: "Roblox GLES 3.2"
+		);
+
+		wmDelete =
+			XInternAtom(
+				xDisplay,
+				"WM_DELETE_WINDOW",
+				False
+			);
+
+		XSetWMProtocols(
+			xDisplay,
+			xWindow,
+			&wmDelete,
+			1
+		);
+
+		XMapWindow(
+			xDisplay,
+			xWindow
+		);
+
+		XFlush(xDisplay);
+
+		return true;
+	}
+
+	bool createEglContext()
+	{
 		eglSurface =
 			eglCreateWindowSurface(
 				eglDisplay,
@@ -852,9 +943,12 @@ struct Gles32Renderer::Impl
 			EGL_NO_SURFACE
 		)
 		{
-			EngineLog::write(
+			EngineLog::writef(
 				EngineLog::Component::Renderer,
-				"eglCreateWindowSurface failed"
+				"eglCreateWindowSurface failed: 0x%04x",
+				static_cast<unsigned int>(
+					eglGetError()
+				)
 			);
 
 			return false;
@@ -889,9 +983,12 @@ struct Gles32Renderer::Impl
 			EGL_NO_CONTEXT
 		)
 		{
-			EngineLog::write(
+			EngineLog::writef(
 				EngineLog::Component::Renderer,
-				"eglCreateContext GLES 3.x failed"
+				"eglCreateContext GLES failed: 0x%04x",
+				static_cast<unsigned int>(
+					eglGetError()
+				)
 			);
 
 			return false;
@@ -906,6 +1003,11 @@ struct Gles32Renderer::Impl
 			) != EGL_TRUE
 		)
 		{
+			EngineLog::write(
+				EngineLog::Component::Renderer,
+				"eglMakeCurrent failed"
+			);
+
 			return false;
 		}
 
@@ -1318,6 +1420,19 @@ struct Gles32Renderer::Impl
 			xWindow = 0;
 		}
 
+		if (
+			xDisplay &&
+			xColormap
+		)
+		{
+			XFreeColormap(
+				xDisplay,
+				xColormap
+			);
+
+			xColormap = 0;
+		}
+
 		if (xDisplay)
 		{
 			XCloseDisplay(
@@ -1360,6 +1475,9 @@ bool Gles32Renderer::initialize(
 			height
 		);
 
+	if (!impl_->createDisplayAndConfig())
+		return false;
+
 	if (
 		!impl_->createX11Window(
 			title
@@ -1369,7 +1487,7 @@ bool Gles32Renderer::initialize(
 		return false;
 	}
 
-	if (!impl_->createEgl())
+	if (!impl_->createEglContext())
 		return false;
 
 	if (!impl_->createResources())
